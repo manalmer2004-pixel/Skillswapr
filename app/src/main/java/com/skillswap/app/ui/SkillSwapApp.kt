@@ -14,8 +14,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.*
 import com.skillswap.app.data.MockData
 import com.skillswap.app.data.model.SkillListing
+import com.skillswap.app.data.repository.SkillRepository
 import com.skillswap.app.ui.screens.*
 import com.skillswap.app.ui.viewmodel.AuthViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun SkillSwapApp(
@@ -26,6 +28,16 @@ fun SkillSwapApp(
     val startDest = if (authUiState.isAuthenticated) "explore" else "welcome"
     var currentRoute by remember(startDest) { mutableStateOf(startDest) }
     var selectedListingDetail by remember { mutableStateOf<SkillListing?>(null) }
+
+    val scope = rememberCoroutineScope()
+    val skillRepository = remember { SkillRepository() }
+    val allListings = remember { mutableStateListOf<SkillListing>() }
+
+    LaunchedEffect(Unit) {
+        val loadedSkills = skillRepository.getSkills()
+        allListings.clear()
+        allListings.addAll(loadedSkills)
+    }
 
     Scaffold(
         bottomBar = {
@@ -127,6 +139,13 @@ fun SkillSwapApp(
                         selectedListingDetail = listing
                         currentRoute = "listing_detail"
                         navController.navigate("listing_detail")
+                    },
+                    listings = allListings,
+                    onBookmarkToggle = { target ->
+                        val index = allListings.indexOfFirst { it.id == target.id }
+                        if (index != -1) {
+                            allListings[index] = allListings[index].copy(saved = !allListings[index].saved)
+                        }
                     }
                 )
             }
@@ -136,6 +155,13 @@ fun SkillSwapApp(
                         selectedListingDetail = listing
                         currentRoute = "listing_detail"
                         navController.navigate("listing_detail")
+                    },
+                    listings = allListings,
+                    onBookmarkToggle = { target ->
+                        val index = allListings.indexOfFirst { it.id == target.id }
+                        if (index != -1) {
+                            allListings[index] = allListings[index].copy(saved = !allListings[index].saved)
+                        }
                     }
                 )
             }
@@ -150,23 +176,41 @@ fun SkillSwapApp(
                             popUpTo(0)
                         }
                     },
-                    authViewModel = authViewModel
+                    authViewModel = authViewModel,
+                    userListings = allListings,
+                    onDeleteListing = { listingId ->
+                        allListings.removeAll { it.id == listingId }
+                        scope.launch {
+                            skillRepository.deleteSkill(listingId)
+                        }
+                    }
                 )
             }
             composable("create_listing") {
+                val currentUserName = authUiState.userProfile?.name?.ifBlank { "Maya Lin" } ?: "Maya Lin"
+                val currentUserId = authUiState.userProfile?.id?.ifBlank { "user_maya" } ?: "user_maya"
+
                 CreateListingScreen(
                     onDismiss = {
                         currentRoute = "explore"
                         navController.popBackStack()
                     },
                     onPublish = { newListing ->
+                        val listingWithAuthor = newListing.copy(
+                            teacherName = currentUserName,
+                            userId = currentUserId
+                        )
+                        allListings.add(0, listingWithAuthor)
+                        scope.launch {
+                            skillRepository.addSkill(listingWithAuthor)
+                        }
                         currentRoute = "explore"
                         navController.popBackStack()
                     }
                 )
             }
             composable("listing_detail") {
-                val listing = selectedListingDetail ?: MockData.INITIAL_LISTINGS.first()
+                val listing = selectedListingDetail ?: allListings.firstOrNull() ?: MockData.INITIAL_LISTINGS.first()
                 ListingDetailScreen(
                     listing = listing,
                     onBack = {

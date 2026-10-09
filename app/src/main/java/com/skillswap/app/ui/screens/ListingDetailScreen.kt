@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.skillswap.app.data.model.SkillListing
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,7 +88,17 @@ fun ListingDetailScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Hero Image if available
-            if (listing.imageResId != null) {
+            if (!listing.imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = listing.imageUrl,
+                    contentDescription = listing.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            } else if (listing.imageResId != null) {
                 Image(
                     painter = painterResource(id = listing.imageResId),
                     contentDescription = listing.title,

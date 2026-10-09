@@ -31,11 +31,12 @@ import com.skillswap.app.data.model.SkillListing
 fun ExploreScreen(
     onSelectSkill: (SkillListing) -> Unit,
     onRequestSkill: (SkillListing) -> Unit,
-    creditBalance: Double = MockData.CURRENT_USER.timeCreditBalance
+    creditBalance: Double = MockData.CURRENT_USER.timeCreditBalance,
+    listings: List<SkillListing> = MockData.INITIAL_LISTINGS,
+    onBookmarkToggle: (SkillListing) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
-    var listings by remember { mutableStateOf(MockData.INITIAL_LISTINGS) }
 
     val filteredListings = listings.filter { listing ->
         val matchesCategory = selectedCategory == "All" || listing.category == selectedCategory
@@ -134,12 +135,7 @@ fun ExploreScreen(
                     SkillListingCard(
                         listing = listing,
                         onClick = { onSelectSkill(listing) },
-                        onBookmarkToggle = { target ->
-                            listings = listings.map { item ->
-                                if (item.id == target.id) item.copy(saved = !item.saved)
-                                else item
-                            }
-                        }
+                        onBookmarkToggle = { target -> onBookmarkToggle(target) }
                     )
                 }
             }

@@ -1,18 +1,30 @@
 package com.skillswap.app.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.skillswap.app.data.MockData
 import com.skillswap.app.data.model.SkillListing
+import com.skillswap.app.data.repository.StorageRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,12 +32,26 @@ fun CreateListingScreen(
     onDismiss: () -> Unit,
     onPublish: (SkillListing) -> Unit
 ) {
+    val categories = remember { MockData.SKILL_CATEGORIES.filter { it != "All" } }
     var listingType by remember { mutableStateOf("offer") } // "offer" or "request"
     var title by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(MockData.SKILL_CATEGORIES[1]) }
+    var selectedCategory by remember { mutableStateOf(categories.first()) }
+    val selectedCategoryIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
     var description by remember { mutableStateOf("") }
     var estimatedHours by remember { mutableStateOf(2.0f) }
     var toolsProvidedInput by remember { mutableStateOf("") }
+
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var isPublishing by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+    val storageRepository = remember { StorageRepository() }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        selectedImageUri = uri
+    }
 
     Scaffold(
         topBar = {
@@ -77,13 +103,71 @@ fun CreateListingScreen(
 
             // Category Selection
             Text("Category", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Row(modifier = Modifier.fillMaxWidth()) {
-                ScrollableTabRow(selectedTabIndex = MockData.SKILL_CATEGORIES.indexOf(selectedCategory).coerceAtLeast(0)) {
-                    MockData.SKILL_CATEGORIES.drop(1).forEach { cat ->
-                        Tab(
-                            selected = selectedCategory == cat,
-                            onClick = { selectedCategory = cat },
-                            text = { Text(cat) }
+            ScrollableTabRow(
+                selectedTabIndex = selectedCategoryIndex,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                categories.forEachIndexed { index, cat ->
+                    Tab(
+                        selected = selectedCategoryIndex == index,
+                        onClick = { selectedCategory = cat },
+                        text = { Text(cat) }
+                    )
+                }
+            }
+
+            // Image Picker Section
+            Text("Skill Image (Optional)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            if (selectedImageUri != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                ) {
+                    AsyncImage(
+                        model = selectedImageUri,
+                        contentDescription = "Skill Image Preview",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    IconButton(
+                        onClick = { selectedImageUri = null },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                        )
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Remove Image")
+                    }
+                }
+            } else {
+                OutlinedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(130.dp)
+                        .clickable { imagePickerLauncher.launch("image/*") },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.AddPhotoAlternate,
+                            contentDescription = "Upload Image",
+                            modifier = Modifier.size(36.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Tap to add a photo of your skill or equipment",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -130,28 +214,48 @@ fun CreateListingScreen(
             Button(
                 onClick = {
                     if (title.isNotBlank()) {
-                        val newListing = SkillListing(
-                            id = "listing_${System.currentTimeMillis()}",
-                            userId = "user_maya",
-                            type = listingType,
-                            title = title,
-                            category = selectedCategory,
-                            description = description,
-                            estimatedHours = estimatedHours.toDouble(),
-                            creditCost = estimatedHours.toDouble(),
-                            toolsProvided = toolsProvidedInput.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                            teacherName = "Maya Lin",
-                            teacherRating = 4.9
-                        )
-                        onPublish(newListing)
+                        isPublishing = true
+                        scope.launch {
+                            val listingId = "listing_${System.currentTimeMillis()}"
+                            var imageUrl = ""
+                            selectedImageUri?.let { uri ->
+                                imageUrl = storageRepository.uploadSkillImage(uri, listingId) ?: uri.toString()
+                            }
+
+                            val newListing = SkillListing(
+                                id = listingId,
+                                userId = "user_maya",
+                                type = listingType,
+                                title = title,
+                                category = selectedCategory,
+                                description = description,
+                                imageUrl = imageUrl,
+                                estimatedHours = estimatedHours.toDouble(),
+                                creditCost = estimatedHours.toDouble(),
+                                toolsProvided = toolsProvidedInput.split(",").map { it.trim() }.filter { it.isNotBlank() },
+                                teacherName = "Maya Lin",
+                                teacherRating = 4.9
+                            )
+                            isPublishing = false
+                            onPublish(newListing)
+                        }
                     }
                 },
+                enabled = title.isNotBlank() && !isPublishing,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Publish Listing", style = MaterialTheme.typography.titleMedium)
+                if (isPublishing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Publish Listing", style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
     }

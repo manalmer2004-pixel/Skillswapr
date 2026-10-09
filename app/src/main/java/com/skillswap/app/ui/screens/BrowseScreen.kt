@@ -17,12 +17,13 @@ import com.skillswap.app.data.model.SkillListing
 
 @Composable
 fun BrowseScreen(
-    onSelectSkill: (SkillListing) -> Unit = {}
+    onSelectSkill: (SkillListing) -> Unit = {},
+    listings: List<SkillListing> = MockData.INITIAL_LISTINGS,
+    onBookmarkToggle: (SkillListing) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedType by remember { mutableStateOf("All") } // All, Offers, Requests
-    var listings by remember { mutableStateOf(MockData.INITIAL_LISTINGS) }
 
     val filteredListings = listings.filter { listing ->
         val matchesCategory = selectedCategory == "All" || listing.category == selectedCategory
@@ -102,12 +103,7 @@ fun BrowseScreen(
                 SkillListingCard(
                     listing = listing,
                     onClick = { onSelectSkill(listing) },
-                    onBookmarkToggle = { target ->
-                        listings = listings.map { item ->
-                            if (item.id == target.id) item.copy(saved = !item.saved)
-                            else item
-                        }
-                    }
+                    onBookmarkToggle = { target -> onBookmarkToggle(target) }
                 )
             }
         }

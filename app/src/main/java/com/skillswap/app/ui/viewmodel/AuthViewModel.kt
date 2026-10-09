@@ -130,6 +130,17 @@ class AuthViewModel(
         }
     }
 
+    fun updateBio(newBio: String) {
+        val currentProfile = _uiState.value.userProfile ?: UserProfile(bio = newBio)
+        val updatedProfile = currentProfile.copy(bio = newBio)
+        _uiState.value = _uiState.value.copy(userProfile = updatedProfile)
+
+        val uid = authRepository.currentUser?.uid ?: return
+        viewModelScope.launch {
+            userRepository.updateUserProfile(updatedProfile.copy(id = uid))
+        }
+    }
+
     fun signOut(onLoggedOut: () -> Unit) {
         authRepository.signOut()
         _uiState.value = AuthUiState(isAuthenticated = false)
