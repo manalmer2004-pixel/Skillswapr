@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#0D9488</color>
+    <color name="teal_dark">#0F766E</color>
+    <color name="teal_light">#5EEAD4</color>
+    <color name="teal_primary">#0D9488</color>
+    <string name="app_name">SkillSwap</string>
+    <string name="gcm_defaultSenderId" translatable="false">289881603392</string>
+    <string name="google_api_key" translatable="false">AIzaSyCFswcBYswBzUfRxWfMFaC7oc-EPxYa2co</string>
+    <string name="google_app_id" translatable="false">1:289881603392:android:a29b5122df29d9136c8ea5</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyCFswcBYswBzUfRxWfMFaC7oc-EPxYa2co</string>
+    <string name="google_storage_bucket" translatable="false">skillswap-60d60.firebasestorage.app</string>
+    <string name="project_id" translatable="false">skillswap-60d60</string>
+    <string name="time_bank_tagline">Trade Time, Not Money</string>
+    <style name="Theme.SkillSwap" parent="android:Theme.Material.Light.NoActionBar"/>
+</resources>
