@@ -1,8 +1,9 @@
 package com.skillswap.app.data.repository
 
+import com.google.firebase.firestore.AggregateField
+import com.google.firebase.firestore.AggregateSource
 import com.google.firebase.firestore.FirebaseFirestore
 import com.skillswap.app.data.model.Review
-import com.skillswap.app.data.model.UserProfile
 import kotlinx.coroutines.tasks.await
 
 class ReviewRepository(
@@ -10,30 +11,31 @@ class ReviewRepository(
 ) {
     suspend fun addReview(review: Review): Boolean {
         return try {
-            firestore.runTransaction { transaction ->
-                val reviewRef = firestore.collection("reviews").document()
-                val reviewWithId = review.copy(id = reviewRef.id)
-                transaction.set(reviewRef, reviewWithId)
-
-                val userRef = firestore.collection("users").document(review.revieweeId)
-                val userSnap = transaction.get(userRef)
-                val userProfile = userSnap.toObject(UserProfile::class.java)
-
-                if (userProfile != null) {
-                    val currentCount = userProfile.reviewCount
-                    val currentRating = userProfile.rating
-                    val newCount = currentCount + 1
-                    val newRating = ((currentRating * currentCount) + review.rating) / newCount
-
-                    transaction.update(userRef, mapOf(
-                        "reviewCount" to newCount,
-                        "rating" to newRating
-                    ))
-                }
-            }.await()
+            val docId = "${review.sessionId}_${review.reviewerId}"
+            val reviewRef = firestore.collection("reviews").document(docId)
+            val reviewWithId = review.copy(id = docId)
+            reviewRef.set(reviewWithId).await()
             true
         } catch (e: Exception) {
             false
+        }
+    }
+
+    suspend fun getRatingSummary(userId: String): Pair<Double, Long> {
+        return try {
+            val query = firestore.collection("reviews")
+                .whereEqualTo("revieweeId", userId)
+
+            val snapshot = query.aggregate(
+                AggregateField.count(),
+                AggregateField.average("rating")
+            ).get(AggregateSource.SERVER).await()
+
+            val count = snapshot.get(AggregateField.count())
+            val avg = snapshot.get(AggregateField.average("rating")) ?: 0.0
+            Pair(avg, count)
+        } catch (e: Exception) {
+            Pair(0.0, 0L)
         }
     }
 }

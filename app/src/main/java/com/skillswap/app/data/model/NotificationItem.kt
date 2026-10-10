@@ -6,7 +6,8 @@ enum class NotificationType {
     REQUEST_CREATED,
     REQUEST_ACCEPTED,
     REQUEST_DECLINED,
-    REQUEST_COMPLETED
+    REQUEST_COMPLETED,
+    REQUEST_CANCELLED
 }
 
 data class NotificationItem(

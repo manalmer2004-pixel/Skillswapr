@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -11,18 +13,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.skillswap.app.data.model.Review
 import com.skillswap.app.data.model.SwapRequest
 import com.skillswap.app.data.model.SwapRequestStatus
 import com.skillswap.app.ui.viewmodel.AuthViewModel
+import com.skillswap.app.ui.viewmodel.ReviewViewModel
 import com.skillswap.app.ui.viewmodel.SwapRequestViewModel
 
 @Composable
 fun MyRequestsScreen(
     authViewModel: AuthViewModel = viewModel(),
-    requestViewModel: SwapRequestViewModel = viewModel()
+    requestViewModel: SwapRequestViewModel = viewModel(),
+    reviewViewModel: ReviewViewModel = viewModel(),
+    onNavigateToChat: () -> Unit = {}
 ) {
     val authState by authViewModel.uiState.collectAsState()
-    val userId = authState.userProfile?.id ?: "user_maya"
+    val userId = authState.userProfile?.id ?: ""
 
     val sentRequests by requestViewModel.requests.collectAsState()
     val receivedRequests by requestViewModel.receivedRequests.collectAsState()
@@ -31,8 +37,14 @@ fun MyRequestsScreen(
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Sent, 1 = Received
     val snackbarHostState = remember { SnackbarHostState() }
 
+    var requestToReview by remember { mutableStateOf<SwapRequest?>(null) }
+    var reviewRating by remember { mutableDoubleStateOf(5.0) }
+    var reviewComment by remember { mutableStateOf("") }
+
     LaunchedEffect(userId) {
-        requestViewModel.loadRequests(userId)
+        if (userId.isNotBlank()) {
+            requestViewModel.loadRequests(userId)
+        }
     }
 
     LaunchedEffect(actionResult) {
@@ -40,6 +52,71 @@ fun MyRequestsScreen(
             snackbarHostState.showSnackbar(msg)
             requestViewModel.clearActionResult()
         }
+    }
+
+    // Review Dialog
+    if (requestToReview != null) {
+        val target = requestToReview!!
+        val isRequester = userId == target.requesterId
+        val revieweeId = if (isRequester) target.providerId else target.requesterId
+
+        AlertDialog(
+            onDismissRequest = { requestToReview = null },
+            title = { Text("Leave Review for ${target.skillTitle}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Rating (1 - 5 Stars):")
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        (1..5).forEach { star ->
+                            IconButton(
+                                onClick = { reviewRating = star.toDouble() },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Star,
+                                    contentDescription = "$star Stars",
+                                    tint = if (star <= reviewRating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = reviewComment,
+                        onValueChange = { reviewComment = it },
+                        label = { Text("Comment / Feedback") },
+                        placeholder = { Text("Share how the skill exchange went...") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val review = Review(
+                            sessionId = target.id,
+                            reviewerId = userId,
+                            revieweeId = revieweeId,
+                            rating = reviewRating,
+                            comment = reviewComment
+                        )
+                        reviewViewModel.submitReview(review) {
+                            requestToReview = null
+                        }
+                    }
+                ) {
+                    Text("Submit Review")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { requestToReview = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -97,6 +174,9 @@ fun MyRequestsScreen(
                             isReceived = selectedTab == 1,
                             onUpdateStatus = { status ->
                                 requestViewModel.updateStatus(request.id, status)
+                            },
+                            onOpenReview = {
+                                requestToReview = request
                             }
                         )
                     }
@@ -110,7 +190,8 @@ fun MyRequestsScreen(
 fun SwapRequestCard(
     request: SwapRequest,
     isReceived: Boolean,
-    onUpdateStatus: (SwapRequestStatus) -> Unit
+    onUpdateStatus: (SwapRequestStatus) -> Unit,
+    onOpenReview: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -153,30 +234,53 @@ fun SwapRequestCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            if (request.status == SwapRequestStatus.PENDING && isReceived) {
+            if (request.status == SwapRequestStatus.PENDING) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { onUpdateStatus(SwapRequestStatus.ACCEPTED) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Accept")
+                if (isReceived) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { onUpdateStatus(SwapRequestStatus.ACCEPTED) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Accept")
+                        }
+                        OutlinedButton(
+                            onClick = { onUpdateStatus(SwapRequestStatus.DECLINED) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Decline")
+                        }
+                        OutlinedButton(
+                            onClick = { onUpdateStatus(SwapRequestStatus.CANCELLED) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel")
+                        }
                     }
+                } else {
                     OutlinedButton(
-                        onClick = { onUpdateStatus(SwapRequestStatus.DECLINED) },
-                        modifier = Modifier.weight(1f)
+                        onClick = { onUpdateStatus(SwapRequestStatus.CANCELLED) },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Decline")
+                        Text("Cancel Request")
                     }
                 }
-            } else if (request.status == SwapRequestStatus.ACCEPTED) {
+            } else if (request.status == SwapRequestStatus.ACCEPTED && isReceived) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = { onUpdateStatus(SwapRequestStatus.COMPLETED) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text("Mark as Completed (Transfer Credits)")
+                    Text("Mark Completed (Transfer Credits)")
+                }
+            } else if (request.status == SwapRequestStatus.COMPLETED) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onOpenReview,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Leave Review")
                 }
             }
         }

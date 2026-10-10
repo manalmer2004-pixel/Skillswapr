@@ -5,9 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.skillswap.app.data.model.Chat
 import com.skillswap.app.data.model.ChatMessage
 import com.skillswap.app.data.repository.ChatRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 class ChatViewModel(
@@ -23,20 +25,30 @@ class ChatViewModel(
     private val _activeChatId = MutableStateFlow<String?>(null)
     val activeChatId: StateFlow<String?> = _activeChatId.asStateFlow()
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private var loadChatsJob: Job? = null
+    private var loadMessagesJob: Job? = null
+
     fun loadChats(userId: String) {
-        viewModelScope.launch {
-            repository.getChatsFlow(userId).collect {
-                _chats.value = it
-            }
+        loadChatsJob?.cancel()
+        loadChatsJob = viewModelScope.launch {
+            repository.getChatsFlow(userId)
+                .catch { e -> _errorMessage.value = e.localizedMessage }
+                .collect { _chats.value = it }
         }
     }
 
     fun selectChat(chatId: String) {
+        loadMessagesJob?.cancel()
+        _messages.value = emptyList()
         _activeChatId.value = chatId
-        viewModelScope.launch {
-            repository.getMessagesFlow(chatId).collect {
-                _messages.value = it
-            }
+
+        loadMessagesJob = viewModelScope.launch {
+            repository.getMessagesFlow(chatId)
+                .catch { e -> _errorMessage.value = e.localizedMessage }
+                .collect { _messages.value = it }
         }
     }
 
@@ -53,5 +65,9 @@ class ChatViewModel(
             selectChat(chatId)
             onChatReady(chatId)
         }
+    }
+
+    fun clearErrorMessage() {
+        _errorMessage.value = null
     }
 }

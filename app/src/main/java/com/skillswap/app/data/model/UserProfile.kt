@@ -14,15 +14,16 @@ data class UserProfile(
     val location: String = "Nairobi, Kenya",
     val distanceMiles: Double = 0.0,
     val bio: String = "",
-    val rating: Double = 5.0,
+    val rating: Double = 0.0,
     val reviewCount: Int = 0,
-    val timeCreditBalance: Double = 3.5,
-    val totalHoursEarned: Double = 8.0,
-    val totalHoursSpent: Double = 4.5,
-    val joinedDate: String = "Apr 2024",
+    val timeCreditBalance: Double = 0.0,
+    val totalHoursEarned: Double = 0.0,
+    val totalHoursSpent: Double = 0.0,
+    val joinedDate: String = "",
     val skillsOffered: List<String> = emptyList(),
     val skillsWanted: List<String> = emptyList(),
     val badges: List<String> = emptyList(),
     @get:PropertyName("isVerified") val isVerified: Boolean = true,
-    @get:PropertyName("isAdmin") val isAdmin: Boolean = false
+    @get:PropertyName("isAdmin") val isAdmin: Boolean = false,
+    val lastSwapId: String = ""
 )

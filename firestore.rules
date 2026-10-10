@@ -2,80 +2,187 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Users Collection
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // --- 1. USERS COLLECTION ---
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['timeCreditBalance']));
+
+      allow create: if isOwner(userId)
+        && request.resource.data.timeCreditBalance == 3.0
+        && request.resource.data.isAdmin == false
+        && request.resource.data.isVerified == false
+        && request.resource.data.rating == 0
+        && request.resource.data.reviewCount == 0;
+
+      allow update: if isOwner(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['timeCreditBalance', 'rating', 'reviewCount', 'isAdmin', 'isVerified', 'lastSwapId'])
+        || isSwapCreditTransfer(userId);
+
       allow delete: if isOwner(userId);
     }
 
-    // Skills Collection
-    match /skills/{skillId} {
-      allow read: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid);
+    function isSwapCreditTransfer(userId) {
+      let lastSwapId = request.resource.data.lastSwapId;
+      let reqBefore = get(/databases/$(database)/documents/swapRequests/$(lastSwapId)).data;
+      let reqAfter = getAfter(/databases/$(database)/documents/swapRequests/$(lastSwapId)).data;
+
+      return lastSwapId is string
+        && reqBefore.status == 'ACCEPTED'
+        && reqAfter.status == 'COMPLETED'
+        && (
+          (userId == reqAfter.requesterId
+            && request.resource.data.timeCreditBalance == resource.data.timeCreditBalance - reqAfter.durationHours
+            && getAfter(/databases/$(database)/documents/transactions/$(lastSwapId + '_spent')).data.balanceAfter == request.resource.data.timeCreditBalance)
+          ||
+          (userId == reqAfter.providerId
+            && request.resource.data.timeCreditBalance == resource.data.timeCreditBalance + reqAfter.durationHours
+            && getAfter(/databases/$(database)/documents/transactions/$(lastSwapId + '_earned')).data.balanceAfter == request.resource.data.timeCreditBalance)
+        );
     }
 
-    // Swap Requests Collection
-    match /swapRequests/{requestId} {
-      allow read: if isSignedIn() && (resource.data.requesterId == request.auth.uid || resource.data.providerId == request.auth.uid);
-      allow create: if isSignedIn() && request.resource.data.requesterId == request.auth.uid;
-      allow update: if isSignedIn() && (resource.data.requesterId == request.auth.uid || resource.data.providerId == request.auth.uid);
-      allow delete: if isSignedIn() && resource.data.requesterId == request.auth.uid;
-    }
-
-    // Credit Ledger Transactions (Immutable / Transaction-driven)
+    // --- 2. TRANSACTIONS COLLECTION ---
     match /transactions/{transactionId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow write: if false;
+
+      allow create: if isBonusTransaction(transactionId) || isSwapTransaction(transactionId);
+      allow update, delete: if false;
     }
 
-    // Reviews Collection
+    function isBonusTransaction(txId) {
+      return txId == 'bonus_' + request.auth.uid
+        && request.resource.data.type == 'BONUS'
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.amount == 3.0;
+    }
+
+    function isSwapTransaction(txId) {
+      let swapReq = getAfter(/databases/$(database)/documents/swapRequests/$(request.resource.data.sessionId)).data;
+      return swapReq.status == 'COMPLETED'
+        && request.resource.data.amount == swapReq.durationHours
+        && (
+          (txId == request.resource.data.sessionId + '_spent'
+            && request.resource.data.type == 'SPENT'
+            && request.resource.data.userId == swapReq.requesterId)
+          ||
+          (txId == request.resource.data.sessionId + '_earned'
+            && request.resource.data.type == 'EARNED'
+            && request.resource.data.userId == swapReq.providerId)
+        );
+    }
+
+    // --- 3. SWAP REQUESTS COLLECTION ---
+    match /swapRequests/{requestId} {
+      allow read: if isSignedIn() && (resource.data.requesterId == request.auth.uid || resource.data.providerId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && request.resource.data.requesterId == request.auth.uid
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.requesterId != request.resource.data.providerId;
+
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && (
+          // Provider accepts or declines
+          (request.auth.uid == resource.data.providerId && resource.data.status == 'PENDING' && (request.resource.data.status == 'ACCEPTED' || request.resource.data.status == 'DECLINED'))
+          ||
+          // Requester cancels
+          (request.auth.uid == resource.data.requesterId && resource.data.status == 'PENDING' && request.resource.data.status == 'CANCELLED')
+          ||
+          // Either participant completes
+          ((request.auth.uid == resource.data.requesterId || request.auth.uid == resource.data.providerId) && resource.data.status == 'ACCEPTED' && request.resource.data.status == 'COMPLETED')
+        );
+
+      allow delete: if false;
+    }
+
+    // --- 4. REVIEWS COLLECTION ---
     match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.reviewerId == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.reviewerId == request.auth.uid;
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && reviewId == request.resource.data.sessionId + '_' + request.auth.uid
+        && request.resource.data.reviewerId == request.auth.uid
+        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && isCompletedParticipant(request.resource.data.sessionId, request.auth.uid, request.resource.data.revieweeId);
+
+      allow update, delete: if false;
     }
 
-    // Chats & Messages Subcollection
+    function isCompletedParticipant(sessionId, reviewerId, revieweeId) {
+      let req = get(/databases/$(database)/documents/swapRequests/$(sessionId)).data;
+      return req.status == 'COMPLETED'
+        && (
+          (reviewerId == req.requesterId && revieweeId == req.providerId)
+          ||
+          (reviewerId == req.providerId && revieweeId == req.requesterId)
+        );
+    }
+
+    // --- 5. SKILLS COLLECTION ---
+    match /skills/{skillId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // --- 6. CHATS & MESSAGES COLLECTION ---
     match /chats/{chatId} {
-      allow read, write: if isSignedIn() && (request.auth.uid in resource.data.participantIds || request.auth.uid in request.resource.data.participantIds);
+      allow read, create: if isSignedIn() && (request.auth.uid in request.resource.data.participantIds || request.auth.uid in resource.data.participantIds);
+      allow update: if isSignedIn()
+        && (request.auth.uid in resource.data.participantIds)
+        && request.resource.data.participantIds == resource.data.participantIds;
+      allow delete: if false;
 
       match /messages/{messageId} {
-        allow read, write: if isSignedIn() && (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds);
+        allow read: if isSignedIn() && (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds);
+        allow create: if isSignedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds);
+        allow update, delete: if false;
       }
     }
 
-    // Categories Collection
-    match /categories/{categoryId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    // Notifications Collection
+    // --- 7. NOTIFICATIONS COLLECTION ---
     match /notifications/{notificationId} {
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn();
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId != request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
-    // Availability Collection
+    // --- 8. CATEGORIES COLLECTION ---
+    match /categories/{categoryId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // --- 9. AVAILABILITY & FAVORITES COLLECTIONS ---
     match /availability/{availabilityId} {
       allow read: if true;
-      allow create, update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || request.resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
-    // Favorites Collection
     match /favorites/{favoriteId} {
-      allow read, create, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || request.resource.data.userId == request.auth.uid);
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && favoriteId == request.auth.uid + '_' + request.resource.data.skillId
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
   }
 }

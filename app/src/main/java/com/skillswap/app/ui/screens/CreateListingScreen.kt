@@ -20,25 +20,34 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.skillswap.app.data.MockData
 import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.data.repository.StorageRepository
+import com.skillswap.app.ui.viewmodel.CategoryViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateListingScreen(
+    currentUserId: String,
+    currentUserName: String,
     onDismiss: () -> Unit,
-    onPublish: (SkillListing) -> Unit
+    onPublish: (SkillListing) -> Unit,
+    categoryViewModel: CategoryViewModel = viewModel()
 ) {
-    val categories = remember { MockData.SKILL_CATEGORIES.filter { it != "All" } }
+    val categoriesState by categoryViewModel.categories.collectAsState()
+    val categories = remember(categoriesState) {
+        if (categoriesState.isEmpty()) listOf("Water & Sanitation", "Cooking", "Gardening", "Other")
+        else categoriesState.map { it.name }
+    }
+
     var listingType by remember { mutableStateOf("offer") } // "offer" or "request"
     var title by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(categories.first()) }
     val selectedCategoryIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
     var description by remember { mutableStateOf("") }
-    var estimatedHours by remember { mutableStateOf(2.0f) }
+    var estimatedHours by remember { mutableDoubleStateOf(2.0) }
     var toolsProvidedInput by remember { mutableStateOf("") }
 
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -73,6 +82,19 @@ fun CreateListingScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (currentUserId.isBlank()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "You must be signed in to publish a skill swap.",
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+
             // Type Selector (Offer vs Request)
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 SegmentedButton(
@@ -193,8 +215,8 @@ fun CreateListingScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Slider(
-                    value = estimatedHours,
-                    onValueChange = { estimatedHours = it },
+                    value = estimatedHours.toFloat(),
+                    onValueChange = { estimatedHours = it.toDouble() },
                     valueRange = 1.0f..5.0f,
                     steps = 3
                 )
@@ -213,7 +235,7 @@ fun CreateListingScreen(
             // Publish CTA Button
             Button(
                 onClick = {
-                    if (title.isNotBlank()) {
+                    if (title.isNotBlank() && currentUserId.isNotBlank()) {
                         isPublishing = true
                         scope.launch {
                             val listingId = "listing_${System.currentTimeMillis()}"
@@ -224,24 +246,24 @@ fun CreateListingScreen(
 
                             val newListing = SkillListing(
                                 id = listingId,
-                                userId = "user_maya",
+                                userId = currentUserId,
                                 type = listingType,
                                 title = title,
                                 category = selectedCategory,
                                 description = description,
                                 imageUrl = imageUrl,
-                                estimatedHours = estimatedHours.toDouble(),
-                                creditCost = estimatedHours.toDouble(),
+                                estimatedHours = estimatedHours,
+                                creditCost = estimatedHours,
                                 toolsProvided = toolsProvidedInput.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                                teacherName = "Maya Lin",
-                                teacherRating = 4.9
+                                teacherName = currentUserName,
+                                teacherRating = 0.0
                             )
                             isPublishing = false
                             onPublish(newListing)
                         }
                     }
                 },
-                enabled = title.isNotBlank() && !isPublishing,
+                enabled = title.isNotBlank() && currentUserId.isNotBlank() && !isPublishing,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),

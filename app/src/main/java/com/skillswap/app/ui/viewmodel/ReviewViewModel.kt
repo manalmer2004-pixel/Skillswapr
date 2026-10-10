@@ -19,6 +19,9 @@ class ReviewViewModel(
     private val _resultMessage = MutableStateFlow<String?>(null)
     val resultMessage: StateFlow<String?> = _resultMessage.asStateFlow()
 
+    private val _ratingSummary = MutableStateFlow<Pair<Double, Long>>(Pair(0.0, 0L))
+    val ratingSummary: StateFlow<Pair<Double, Long>> = _ratingSummary.asStateFlow()
+
     fun submitReview(review: Review, onComplete: () -> Unit) {
         viewModelScope.launch {
             _isSubmitting.value = true
@@ -31,5 +34,16 @@ class ReviewViewModel(
                 _resultMessage.value = "Failed to submit review"
             }
         }
+    }
+
+    fun loadRatingSummary(userId: String) {
+        viewModelScope.launch {
+            val summary = repository.getRatingSummary(userId)
+            _ratingSummary.value = summary
+        }
+    }
+
+    fun clearResultMessage() {
+        _resultMessage.value = null
     }
 }

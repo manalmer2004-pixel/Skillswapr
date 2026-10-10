@@ -7,48 +7,45 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.skillswap.app.data.MockData
-import com.skillswap.app.data.model.ChatMessage
-import com.skillswap.app.data.model.RequestThread
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.skillswap.app.data.model.Chat
+import com.skillswap.app.data.repository.UserRepository
+import com.skillswap.app.ui.viewmodel.AuthViewModel
+import com.skillswap.app.ui.viewmodel.ChatViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen() {
-    var threads by remember { mutableStateOf(MockData.INITIAL_THREADS) }
-    var selectedThread by remember { mutableStateOf<RequestThread?>(null) }
+fun ChatScreen(
+    authViewModel: AuthViewModel = viewModel(),
+    chatViewModel: ChatViewModel = viewModel()
+) {
+    val authState by authViewModel.uiState.collectAsState()
+    val currentUserId = authState.userProfile?.id ?: ""
 
-    if (selectedThread != null) {
-        ThreadDetailView(
-            thread = selectedThread!!,
-            onBack = { selectedThread = null },
-            onSendMessage = { text ->
-                val newMsg = ChatMessage(
-                    id = "msg_${System.currentTimeMillis()}",
-                    senderId = "user_maya",
-                    text = text,
-                    timestamp = "Just now"
-                )
-                val updated = selectedThread!!.copy(
-                    messages = selectedThread!!.messages + newMsg,
-                    lastMessage = text,
-                    lastMessageTime = "Just now"
-                )
-                selectedThread = updated
-                threads = threads.map { if (it.id == updated.id) updated else it }
-            },
-            onUpdateStatus = { newStatus ->
-                val updated = selectedThread!!.copy(status = newStatus)
-                selectedThread = updated
-                threads = threads.map { if (it.id == updated.id) updated else it }
-            }
+    val chats by chatViewModel.chats.collectAsState()
+    val activeChatId by chatViewModel.activeChatId.collectAsState()
+
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isNotBlank()) {
+            chatViewModel.loadChats(currentUserId)
+        }
+    }
+
+    if (activeChatId != null) {
+        ChatDetailView(
+            chatId = activeChatId!!,
+            currentUserId = currentUserId,
+            chatViewModel = chatViewModel,
+            onBack = { chatViewModel.selectChat("") }
         )
     } else {
         Column(
@@ -64,14 +61,28 @@ fun ChatScreen() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(threads, key = { it.id }) { thread ->
-                    ThreadCard(
-                        thread = thread,
-                        onClick = { selectedThread = thread }
+            if (chats.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No active conversations yet",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(chats, key = { it.id }) { chat ->
+                        ChatCard(
+                            chat = chat,
+                            currentUserId = currentUserId,
+                            onClick = { chatViewModel.selectChat(chat.id) }
+                        )
+                    }
                 }
             }
         }
@@ -79,10 +90,28 @@ fun ChatScreen() {
 }
 
 @Composable
-fun ThreadCard(
-    thread: RequestThread,
+fun ChatCard(
+    chat: Chat,
+    currentUserId: String,
     onClick: () -> Unit
 ) {
+    val userRepository = remember { UserRepository() }
+    var otherUserName by remember { mutableStateOf("User") }
+    val otherUserId = remember(chat.participantIds, currentUserId) {
+        chat.participantIds.firstOrNull { it != currentUserId } ?: ""
+    }
+
+    LaunchedEffect(otherUserId) {
+        if (otherUserId.isNotBlank()) {
+            val profile = userRepository.getUserProfile(otherUserId)
+            if (profile != null && profile.name.isNotBlank()) {
+                otherUserName = profile.name
+            }
+        }
+    }
+
+    val dateFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -101,7 +130,7 @@ fun ThreadCard(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        text = thread.otherUser.name.take(1),
+                        text = otherUserName.take(1),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -115,26 +144,19 @@ fun ThreadCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = thread.otherUser.name,
+                        text = otherUserName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = thread.lastMessageTime,
+                        text = dateFormat.format(Date(chat.updatedAt)),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 Text(
-                    text = thread.listingTitle,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Text(
-                    text = thread.lastMessage,
+                    text = chat.lastMessage,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
@@ -146,23 +168,20 @@ fun ThreadCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ThreadDetailView(
-    thread: RequestThread,
-    onBack: () -> Unit,
-    onSendMessage: (String) -> Unit,
-    onUpdateStatus: (String) -> Unit
+fun ChatDetailView(
+    chatId: String,
+    currentUserId: String,
+    chatViewModel: ChatViewModel,
+    onBack: () -> Unit
 ) {
+    val messages by chatViewModel.messages.collectAsState()
     var textInput by remember { mutableStateOf("") }
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text(thread.otherUser.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(thread.listingTitle, style = MaterialTheme.typography.bodySmall)
-                    }
-                },
+                title = { Text("Conversation") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -194,12 +213,12 @@ fun ThreadDetailView(
                     IconButton(
                         onClick = {
                             if (textInput.isNotBlank()) {
-                                onSendMessage(textInput)
+                                chatViewModel.sendMessage(chatId, currentUserId, textInput)
                                 textInput = ""
                             }
                         }
                     ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -211,52 +230,12 @@ fun ThreadDetailView(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            // Request Status Banner
-            Surface(
-                color = when (thread.status) {
-                    "accepted" -> MaterialTheme.colorScheme.primaryContainer
-                    "completed" -> MaterialTheme.colorScheme.surfaceVariant
-                    else -> MaterialTheme.colorScheme.tertiaryContainer
-                },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Status: ${thread.status.uppercase()} · ${thread.creditsProposed} Time Credits",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelMedium
-                    )
-
-                    if (thread.status == "pending") {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { onUpdateStatus("accepted") },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Accept Swap")
-                            }
-                            OutlinedButton(
-                                onClick = { onUpdateStatus("declined") },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Decline")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Message History
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(thread.messages) { msg ->
-                    val isMe = msg.senderId == "user_maya"
+                items(messages, key = { it.id }) { msg ->
+                    val isMe = msg.senderId == currentUserId
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start
@@ -275,7 +254,7 @@ fun ThreadDetailView(
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                                 Text(
-                                    text = msg.timestamp,
+                                    text = timeFormat.format(Date(msg.sentAt)),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                                     else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)

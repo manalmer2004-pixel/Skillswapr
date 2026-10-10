@@ -5,9 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.skillswap.app.data.model.SwapRequest
 import com.skillswap.app.data.model.SwapRequestStatus
 import com.skillswap.app.data.repository.SwapRequestRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 class SwapRequestViewModel(
@@ -23,26 +25,35 @@ class SwapRequestViewModel(
     private val _actionResult = MutableStateFlow<String?>(null)
     val actionResult: StateFlow<String?> = _actionResult.asStateFlow()
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private var loadSentJob: Job? = null
+    private var loadReceivedJob: Job? = null
+
     fun loadRequests(userId: String) {
-        viewModelScope.launch {
-            repository.getSwapRequestsFlow(userId).collect {
-                _requests.value = it
-            }
+        loadSentJob?.cancel()
+        loadSentJob = viewModelScope.launch {
+            repository.getSwapRequestsFlow(userId)
+                .catch { e -> _errorMessage.value = e.localizedMessage }
+                .collect { _requests.value = it }
         }
-        viewModelScope.launch {
-            repository.getReceivedRequestsFlow(userId).collect {
-                _receivedRequests.value = it
-            }
+
+        loadReceivedJob?.cancel()
+        loadReceivedJob = viewModelScope.launch {
+            repository.getReceivedRequestsFlow(userId)
+                .catch { e -> _errorMessage.value = e.localizedMessage }
+                .collect { _receivedRequests.value = it }
         }
     }
 
-    fun createRequest(request: SwapRequest, onDone: () -> Unit) {
+    fun createRequest(request: SwapRequest, onDone: (String) -> Unit) {
         viewModelScope.launch {
-            val success = repository.createSwapRequest(request)
-            if (success) {
-                onDone()
-            } else {
-                _actionResult.value = "Failed to create swap request"
+            val result = repository.createSwapRequest(request)
+            result.onSuccess { reqId ->
+                onDone(reqId)
+            }.onFailure { e ->
+                _actionResult.value = e.localizedMessage ?: "Failed to create swap request"
             }
         }
     }
@@ -60,5 +71,9 @@ class SwapRequestViewModel(
 
     fun clearActionResult() {
         _actionResult.value = null
+    }
+
+    fun clearErrorMessage() {
+        _errorMessage.value = null
     }
 }

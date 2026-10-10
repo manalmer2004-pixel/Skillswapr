@@ -38,4 +38,16 @@ class AvailabilityRepository(
             false
         }
     }
+
+    suspend fun deleteAvailability(availabilityId: String): Boolean {
+        return try {
+            firestore.collection("availability")
+                .document(availabilityId)
+                .delete()
+                .await()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
 }

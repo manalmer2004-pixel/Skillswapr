@@ -10,28 +10,41 @@ import kotlinx.coroutines.tasks.await
 class SwapRequestRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
-    suspend fun createSwapRequest(request: SwapRequest): Boolean {
+    suspend fun createSwapRequest(request: SwapRequest): Result<String> {
         return try {
+            if (request.requesterId == request.providerId) {
+                return Result.failure(Exception("Requester cannot be the provider for a swap request"))
+            }
+
+            val learnerDoc = firestore.collection("users").document(request.requesterId).get().await()
+            val learnerProfile = learnerDoc.toObject(UserProfile::class.java)
+            val balance = learnerProfile?.timeCreditBalance ?: 0.0
+
+            if (balance < request.durationHours) {
+                return Result.failure(Exception("Insufficient time credit balance for this request"))
+            }
+
             val docRef = firestore.collection("swapRequests").document()
-            val requestWithId = request.copy(id = docRef.id)
+            val requestId = docRef.id
+            val requestWithId = request.copy(id = requestId)
             docRef.set(requestWithId).await()
 
             val notification = NotificationItem(
                 userId = request.providerId,
                 type = NotificationType.REQUEST_CREATED,
-                refId = docRef.id,
+                refId = requestId,
                 message = "New swap request for '${request.skillTitle}'"
             )
             firestore.collection("notifications").add(notification).await()
-            true
+            Result.success(requestId)
         } catch (e: Exception) {
-            false
+            Result.failure(e)
         }
     }
 
     fun getSwapRequestsFlow(userId: String): Flow<List<SwapRequest>> = callbackFlow {
         val listener = firestore.collection("swapRequests")
-            .whereIn("requesterId", listOf(userId))
+            .whereEqualTo("requesterId", userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
@@ -46,7 +59,7 @@ class SwapRequestRepository(
 
     fun getReceivedRequestsFlow(userId: String): Flow<List<SwapRequest>> = callbackFlow {
         val listener = firestore.collection("swapRequests")
-            .whereIn("providerId", listOf(userId))
+            .whereEqualTo("providerId", userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
@@ -68,8 +81,12 @@ class SwapRequestRepository(
                     val request = requestSnap.toObject(SwapRequest::class.java)
                         ?: throw IllegalStateException("Swap request not found")
 
-                    if (request.status == SwapRequestStatus.COMPLETED) {
-                        return@runTransaction
+                    if (request.status != SwapRequestStatus.ACCEPTED) {
+                        throw IllegalStateException("Swap request can only be marked COMPLETED when in ACCEPTED status")
+                    }
+
+                    if (request.requesterId == request.providerId) {
+                        throw IllegalStateException("Requester and provider cannot be the same user")
                     }
 
                     val learnerRef = firestore.collection("users").document(request.requesterId)
@@ -91,13 +108,20 @@ class SwapRequestRepository(
                     val newLearnerBalance = learnerProfile.timeCreditBalance - duration
                     val newTeacherBalance = teacherProfile.timeCreditBalance + duration
 
-                    transaction.update(learnerRef, "timeCreditBalance", newLearnerBalance)
-                    transaction.update(teacherRef, "timeCreditBalance", newTeacherBalance)
+                    transaction.update(learnerRef, mapOf(
+                        "timeCreditBalance" to newLearnerBalance,
+                        "lastSwapId" to requestId
+                    ))
+                    transaction.update(teacherRef, mapOf(
+                        "timeCreditBalance" to newTeacherBalance,
+                        "lastSwapId" to requestId
+                    ))
                     transaction.update(requestRef, "status", SwapRequestStatus.COMPLETED.name)
 
-                    val spentTxRef = firestore.collection("transactions").document()
+                    val spentTxDocId = "${requestId}_spent"
+                    val spentTxRef = firestore.collection("transactions").document(spentTxDocId)
                     val spentTx = CreditTransaction(
-                        id = spentTxRef.id,
+                        id = spentTxDocId,
                         userId = request.requesterId,
                         sessionId = requestId,
                         type = TransactionType.SPENT,
@@ -106,9 +130,10 @@ class SwapRequestRepository(
                     )
                     transaction.set(spentTxRef, spentTx)
 
-                    val earnedTxRef = firestore.collection("transactions").document()
+                    val earnedTxDocId = "${requestId}_earned"
+                    val earnedTxRef = firestore.collection("transactions").document(earnedTxDocId)
                     val earnedTx = CreditTransaction(
-                        id = earnedTxRef.id,
+                        id = earnedTxDocId,
                         userId = request.providerId,
                         sessionId = requestId,
                         type = TransactionType.EARNED,
@@ -142,10 +167,15 @@ class SwapRequestRepository(
                 val requestSnap = firestore.collection("swapRequests").document(requestId).get().await()
                 val request = requestSnap.toObject(SwapRequest::class.java)
                 if (request != null) {
-                    val targetUserId = if (newStatus == SwapRequestStatus.ACCEPTED || newStatus == SwapRequestStatus.DECLINED) request.requesterId else request.providerId
+                    val targetUserId = if (newStatus == SwapRequestStatus.ACCEPTED || newStatus == SwapRequestStatus.DECLINED) {
+                        request.requesterId
+                    } else {
+                        request.providerId
+                    }
                     val type = when (newStatus) {
                         SwapRequestStatus.ACCEPTED -> NotificationType.REQUEST_ACCEPTED
                         SwapRequestStatus.DECLINED -> NotificationType.REQUEST_DECLINED
+                        SwapRequestStatus.CANCELLED -> NotificationType.REQUEST_CANCELLED
                         else -> NotificationType.REQUEST_CREATED
                     }
                     firestore.collection("notifications").add(

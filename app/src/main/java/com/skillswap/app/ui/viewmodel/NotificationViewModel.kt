@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skillswap.app.data.model.NotificationItem
 import com.skillswap.app.data.repository.NotificationRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 class NotificationViewModel(
@@ -16,11 +18,17 @@ class NotificationViewModel(
     private val _notifications = MutableStateFlow<List<NotificationItem>>(emptyList())
     val notifications: StateFlow<List<NotificationItem>> = _notifications.asStateFlow()
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private var loadJob: Job? = null
+
     fun loadNotifications(userId: String) {
-        viewModelScope.launch {
-            repository.getNotificationsFlow(userId).collect {
-                _notifications.value = it
-            }
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            repository.getNotificationsFlow(userId)
+                .catch { e -> _errorMessage.value = e.localizedMessage }
+                .collect { _notifications.value = it }
         }
     }
 
@@ -28,5 +36,9 @@ class NotificationViewModel(
         viewModelScope.launch {
             repository.markAsRead(notificationId)
         }
+    }
+
+    fun clearErrorMessage() {
+        _errorMessage.value = null
     }
 }

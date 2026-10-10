@@ -1,5 +1,6 @@
 package com.skillswap.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -7,6 +8,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,32 +18,44 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.skillswap.app.data.MockData
 import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.ui.viewmodel.AuthViewModel
+import com.skillswap.app.ui.viewmodel.NotificationViewModel
 
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
+    onNavigateToRequests: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = {},
+    onNavigateToTransactions: () -> Unit = {},
     authViewModel: AuthViewModel = viewModel(),
+    notifViewModel: NotificationViewModel = viewModel(),
     userListings: List<SkillListing> = emptyList(),
     onDeleteListing: (String) -> Unit = {}
 ) {
     val uiState by authViewModel.uiState.collectAsState()
     val firestoreProfile = uiState.userProfile
-    val user = MockData.CURRENT_USER.copy(
-        name = firestoreProfile?.name?.ifBlank { MockData.CURRENT_USER.name } ?: MockData.CURRENT_USER.name,
-        email = firestoreProfile?.email?.ifBlank { MockData.CURRENT_USER.email } ?: MockData.CURRENT_USER.email,
-        handle = firestoreProfile?.handle?.ifBlank { "@user" } ?: "@user",
-        bio = firestoreProfile?.bio ?: ""
-    )
+    val currentUserId = firestoreProfile?.id ?: ""
+
+    val notifications by notifViewModel.notifications.collectAsState()
+    val unreadNotifCount = remember(notifications) { notifications.count { !it.read } }
+
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isNotBlank()) {
+            notifViewModel.loadNotifications(currentUserId)
+        }
+    }
+
+    val userName = firestoreProfile?.name?.ifBlank { "User" } ?: "User"
+    val userHandle = firestoreProfile?.handle?.ifBlank { "@user" } ?: "@user"
+    val userBio = firestoreProfile?.bio ?: ""
+    val creditBalance = firestoreProfile?.timeCreditBalance ?: 0.0
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Offered, 1 = Needed
     var showEditBioDialog by remember { mutableStateOf(false) }
-    var editedBioText by remember(user.bio) { mutableStateOf(user.bio) }
+    var editedBioText by remember(userBio) { mutableStateOf(userBio) }
     var listingToDelete by remember { mutableStateOf<SkillListing?>(null) }
 
-    // Dialog for editing user description / bio
     if (showEditBioDialog) {
         AlertDialog(
             onDismissRequest = { showEditBioDialog = false },
@@ -74,7 +90,6 @@ fun ProfileScreen(
         )
     }
 
-    // Confirmation dialog for deleting a skill listing
     if (listingToDelete != null) {
         val target = listingToDelete!!
         AlertDialog(
@@ -123,7 +138,7 @@ fun ProfileScreen(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
-                                text = user.name.take(1),
+                                text = userName.take(1),
                                 style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -133,7 +148,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = user.name,
+                        text = userName,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -156,14 +171,14 @@ fun ProfileScreen(
                     }
 
                     Text(
-                        text = user.handle,
+                        text = userHandle,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Bio / Description Section with Edit Button
+                    // Description Section
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(12.dp),
@@ -182,7 +197,7 @@ fun ProfileScreen(
                                 )
                                 TextButton(
                                     onClick = {
-                                        editedBioText = user.bio
+                                        editedBioText = userBio
                                         showEditBioDialog = true
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
@@ -197,9 +212,9 @@ fun ProfileScreen(
                                 }
                             }
                             Text(
-                                text = if (user.bio.isNotBlank()) user.bio else "No description added yet. Tap 'Edit' to add your description!",
+                                text = if (userBio.isNotBlank()) userBio else "No description added yet. Tap 'Edit' to add your description!",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (user.bio.isNotBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline
+                                color = if (userBio.isNotBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline
                             )
                         }
                     }
@@ -210,7 +225,9 @@ fun ProfileScreen(
         // Wallet Balance Card
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToTransactions() },
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -228,11 +245,89 @@ fun ProfileScreen(
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            text = "${user.timeCreditBalance} Credits",
+                            text = "$creditBalance Credits",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
+                    }
+                    Text(
+                        text = "History →",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        }
+
+        // Quick Navigation Section (My Requests, Notifications, Credit History)
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Dashboard & Activity",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                OutlinedCard(
+                    onClick = onNavigateToRequests,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(14.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text("My Swap Requests", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("→", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                OutlinedCard(
+                    onClick = onNavigateToNotifications,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(14.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text("Notifications", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        if (unreadNotifCount > 0) {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.error
+                            ) {
+                                Text("$unreadNotifCount")
+                            }
+                        }
+                        Text("→", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                OutlinedCard(
+                    onClick = onNavigateToTransactions,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(14.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text("Credit History Ledger", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("→", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -256,11 +351,8 @@ fun ProfileScreen(
 
         // Dynamic Skills Offered / Needed list
         item {
-            val currentUserName = user.name
-            val currentUserId = firestoreProfile?.id ?: "user_maya"
-
             val filteredSkills = userListings.filter { listing ->
-                val isMyListing = listing.userId == currentUserId || listing.teacherName == currentUserName || listing.userId == "user_maya"
+                val isMyListing = listing.userId == currentUserId
                 val matchesTab = if (selectedTab == 0) listing.type == "offer" else listing.type == "request"
                 isMyListing && matchesTab
             }
@@ -326,36 +418,6 @@ fun ProfileScreen(
                                 }
                             }
                         }
-                    }
-                }
-            }
-        }
-
-        // Community Reviews Placeholder Section
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Community Reviews",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "No community reviews yet",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Reviews and ratings from neighbors will appear here once you complete a skill swap.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }

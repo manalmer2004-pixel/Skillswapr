@@ -12,18 +12,39 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.skillswap.app.data.MockData
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.skillswap.app.data.model.SkillListing
+import com.skillswap.app.ui.viewmodel.CategoryViewModel
+import com.skillswap.app.ui.viewmodel.FavoriteViewModel
 
 @Composable
 fun BrowseScreen(
     onSelectSkill: (SkillListing) -> Unit = {},
-    listings: List<SkillListing> = MockData.INITIAL_LISTINGS,
-    onBookmarkToggle: (SkillListing) -> Unit = {}
+    listings: List<SkillListing> = emptyList(),
+    currentUserId: String = "",
+    categoryViewModel: CategoryViewModel = viewModel(),
+    favoriteViewModel: FavoriteViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedType by remember { mutableStateOf("All") } // All, Offers, Requests
+
+    val categoriesState by categoryViewModel.categories.collectAsState()
+    val favoritesState by favoriteViewModel.favorites.collectAsState()
+
+    val categoryNames = remember(categoriesState) {
+        listOf("All") + categoriesState.map { it.name }
+    }
+
+    val favoriteSkillIds = remember(favoritesState) {
+        favoritesState.map { it.skillId }.toSet()
+    }
+
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isNotBlank()) {
+            favoriteViewModel.loadFavorites(currentUserId)
+        }
+    }
 
     val filteredListings = listings.filter { listing ->
         val matchesCategory = selectedCategory == "All" || listing.category == selectedCategory
@@ -84,7 +105,7 @@ fun BrowseScreen(
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(MockData.SKILL_CATEGORIES) { category ->
+            items(categoryNames) { category ->
                 FilterChip(
                     selected = selectedCategory == category,
                     onClick = { selectedCategory = category },
@@ -100,10 +121,16 @@ fun BrowseScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(filteredListings, key = { it.id }) { listing ->
+                val isFavorite = favoriteSkillIds.contains(listing.id)
                 SkillListingCard(
                     listing = listing,
+                    isFavorite = isFavorite,
                     onClick = { onSelectSkill(listing) },
-                    onBookmarkToggle = { target -> onBookmarkToggle(target) }
+                    onFavoriteToggle = {
+                        if (currentUserId.isNotBlank()) {
+                            favoriteViewModel.toggleFavorite(currentUserId, listing.id)
+                        }
+                    }
                 )
             }
         }

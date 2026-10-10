@@ -2,8 +2,8 @@ package com.skillswap.app.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Person
@@ -12,11 +12,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.*
-import com.skillswap.app.data.MockData
 import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.data.repository.SkillRepository
 import com.skillswap.app.ui.screens.*
 import com.skillswap.app.ui.viewmodel.AuthViewModel
+import com.skillswap.app.ui.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -25,12 +25,14 @@ fun SkillSwapApp(
 ) {
     val navController = rememberNavController()
     val authUiState by authViewModel.uiState.collectAsState()
+    val currentUserId = authUiState.userProfile?.id ?: ""
     val startDest = if (authUiState.isAuthenticated) "explore" else "welcome"
     var currentRoute by remember(startDest) { mutableStateOf(startDest) }
     var selectedListingDetail by remember { mutableStateOf<SkillListing?>(null) }
 
     val scope = rememberCoroutineScope()
     val skillRepository = remember { SkillRepository() }
+    val chatViewModel: ChatViewModel = viewModel()
     val allListings = remember { mutableStateListOf<SkillListing>() }
 
     LaunchedEffect(Unit) {
@@ -62,7 +64,7 @@ fun SkillSwapApp(
                         }
                     )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Chat, contentDescription = "Chat") },
+                        icon = { Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat") },
                         label = { Text("Chat") },
                         selected = currentRoute == "chat",
                         onClick = {
@@ -141,12 +143,7 @@ fun SkillSwapApp(
                         navController.navigate("listing_detail")
                     },
                     listings = allListings,
-                    onBookmarkToggle = { target ->
-                        val index = allListings.indexOfFirst { it.id == target.id }
-                        if (index != -1) {
-                            allListings[index] = allListings[index].copy(saved = !allListings[index].saved)
-                        }
-                    }
+                    currentUserId = currentUserId
                 )
             }
             composable("browse") {
@@ -157,16 +154,11 @@ fun SkillSwapApp(
                         navController.navigate("listing_detail")
                     },
                     listings = allListings,
-                    onBookmarkToggle = { target ->
-                        val index = allListings.indexOfFirst { it.id == target.id }
-                        if (index != -1) {
-                            allListings[index] = allListings[index].copy(saved = !allListings[index].saved)
-                        }
-                    }
+                    currentUserId = currentUserId
                 )
             }
             composable("chat") {
-                ChatScreen()
+                ChatScreen(chatViewModel = chatViewModel, authViewModel = authViewModel)
             }
             composable("profile") {
                 ProfileScreen(
@@ -175,6 +167,18 @@ fun SkillSwapApp(
                         navController.navigate("welcome") {
                             popUpTo(0)
                         }
+                    },
+                    onNavigateToRequests = {
+                        currentRoute = "my_requests"
+                        navController.navigate("my_requests")
+                    },
+                    onNavigateToNotifications = {
+                        currentRoute = "notifications"
+                        navController.navigate("notifications")
+                    },
+                    onNavigateToTransactions = {
+                        currentRoute = "transactions"
+                        navController.navigate("transactions")
                     },
                     authViewModel = authViewModel,
                     userListings = allListings,
@@ -186,23 +190,35 @@ fun SkillSwapApp(
                     }
                 )
             }
+            composable("my_requests") {
+                MyRequestsScreen(
+                    authViewModel = authViewModel,
+                    onNavigateToChat = {
+                        currentRoute = "chat"
+                        navController.navigate("chat")
+                    }
+                )
+            }
+            composable("notifications") {
+                NotificationsScreen(authViewModel = authViewModel)
+            }
+            composable("transactions") {
+                TransactionHistoryScreen(authViewModel = authViewModel)
+            }
             composable("create_listing") {
-                val currentUserName = authUiState.userProfile?.name?.ifBlank { "Maya Lin" } ?: "Maya Lin"
-                val currentUserId = authUiState.userProfile?.id?.ifBlank { "user_maya" } ?: "user_maya"
+                val currentUserName = authUiState.userProfile?.name ?: ""
 
                 CreateListingScreen(
+                    currentUserId = currentUserId,
+                    currentUserName = currentUserName,
                     onDismiss = {
                         currentRoute = "explore"
                         navController.popBackStack()
                     },
                     onPublish = { newListing ->
-                        val listingWithAuthor = newListing.copy(
-                            teacherName = currentUserName,
-                            userId = currentUserId
-                        )
-                        allListings.add(0, listingWithAuthor)
+                        allListings.add(0, newListing)
                         scope.launch {
-                            skillRepository.addSkill(listingWithAuthor)
+                            skillRepository.addSkill(newListing)
                         }
                         currentRoute = "explore"
                         navController.popBackStack()
@@ -210,17 +226,22 @@ fun SkillSwapApp(
                 )
             }
             composable("listing_detail") {
-                val listing = selectedListingDetail ?: allListings.firstOrNull() ?: MockData.INITIAL_LISTINGS.first()
+                val listing = selectedListingDetail ?: allListings.firstOrNull() ?: SkillListing()
                 ListingDetailScreen(
                     listing = listing,
+                    currentUserId = currentUserId,
                     onBack = {
                         currentRoute = "explore"
                         navController.popBackStack()
                     },
-                    onRequestSwap = {
-                        currentRoute = "chat"
-                        navController.navigate("chat") {
-                            popUpTo("explore")
+                    onNavigateToRequests = {
+                        currentRoute = "my_requests"
+                        navController.navigate("my_requests")
+                    },
+                    onStartChat = { otherUserId ->
+                        chatViewModel.startChatWithUser(currentUserId, otherUserId) {
+                            currentRoute = "chat"
+                            navController.navigate("chat")
                         }
                     }
                 )

@@ -27,18 +27,15 @@ class FavoriteRepository(
 
     suspend fun toggleFavorite(userId: String, skillId: String): Boolean {
         return try {
-            val query = firestore.collection("favorites")
-                .whereEqualTo("userId", userId)
-                .whereEqualTo("skillId", skillId)
-                .get()
-                .await()
+            val docId = "${userId}_${skillId}"
+            val docRef = firestore.collection("favorites").document(docId)
+            val docSnap = docRef.get().await()
 
-            if (query.isEmpty) {
-                val docRef = firestore.collection("favorites").document()
-                val fav = UserFavorite(id = docRef.id, userId = userId, skillId = skillId)
-                docRef.set(fav).await()
+            if (docSnap.exists()) {
+                docRef.delete().await()
             } else {
-                query.documents.first().reference.delete().await()
+                val fav = UserFavorite(id = docId, userId = userId, skillId = skillId)
+                docRef.set(fav).await()
             }
             true
         } catch (e: Exception) {

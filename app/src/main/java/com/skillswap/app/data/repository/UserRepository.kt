@@ -27,30 +27,30 @@ class UserRepository(
     }
 
     private fun checkIsAdmin(doc: DocumentSnapshot, profile: UserProfile?): Boolean {
+        if (!doc.exists()) return false
         if (profile?.isAdmin == true) return true
 
         val isAdminRaw = doc.get("isAdmin")
         if (isAdminRaw is Boolean && isAdminRaw) return true
         if (isAdminRaw is String && isAdminRaw.equals("true", ignoreCase = true)) return true
 
-        val adminRaw = doc.get("admin")
-        if (adminRaw is Boolean && adminRaw) return true
-        if (adminRaw is String && adminRaw.equals("true", ignoreCase = true)) return true
-
-        val role = doc.getString("role")
-        if (role != null && role.equals("admin", ignoreCase = true)) return true
-
-        val email = doc.getString("email") ?: ""
-        if (email.contains("admin", ignoreCase = true)) return true
-
         return false
     }
 
     suspend fun updateUserProfile(profile: UserProfile): Boolean {
         return try {
+            val editableFields = mapOf(
+                "name" to profile.name,
+                "handle" to profile.handle,
+                "bio" to profile.bio,
+                "location" to profile.location,
+                "avatarUrl" to profile.avatarUrl,
+                "skillsOffered" to profile.skillsOffered,
+                "skillsWanted" to profile.skillsWanted
+            )
             firestore.collection("users")
                 .document(profile.id)
-                .set(profile)
+                .update(editableFields)
                 .await()
             true
         } catch (e: Exception) {
