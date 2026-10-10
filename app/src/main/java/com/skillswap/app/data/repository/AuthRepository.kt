@@ -26,18 +26,28 @@ class AuthRepository(
             val result = auth.createUserWithEmailAndPassword(email, pass).await()
             val user = result.user ?: return AuthResult.Error("User creation failed")
 
+            val initialCredits = 3.0
             val profile = UserProfile(
                 id = user.uid,
                 name = name,
                 email = email,
-                timeCreditBalance = 3.5,
-                totalHoursEarned = 3.5
+                timeCreditBalance = initialCredits,
+                totalHoursEarned = initialCredits
             )
 
-            firestore.collection("users")
-                .document(user.uid)
-                .set(profile)
-                .await()
+            val txRef = firestore.collection("transactions").document()
+            val bonusTx = com.skillswap.app.data.model.CreditTransaction(
+                id = txRef.id,
+                userId = user.uid,
+                type = com.skillswap.app.data.model.TransactionType.BONUS,
+                amount = initialCredits,
+                balanceAfter = initialCredits
+            )
+
+            firestore.runBatch { batch ->
+                batch.set(firestore.collection("users").document(user.uid), profile)
+                batch.set(txRef, bonusTx)
+            }.await()
 
             AuthResult.Success(profile)
         } catch (e: Exception) {
