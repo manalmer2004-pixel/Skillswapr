@@ -17,11 +17,13 @@ import com.skillswap.app.data.repository.SkillRepository
 import com.skillswap.app.ui.screens.*
 import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.ChatViewModel
+import com.skillswap.app.ui.viewmodel.ReviewViewModel
 import kotlinx.coroutines.launch
 
 @Composable
 fun SkillSwapApp(
-    authViewModel: AuthViewModel = viewModel()
+    authViewModel: AuthViewModel = viewModel(),
+    reviewViewModel: ReviewViewModel = viewModel()
 ) {
     val navController = rememberNavController()
     val authUiState by authViewModel.uiState.collectAsState()
@@ -35,10 +37,16 @@ fun SkillSwapApp(
     val chatViewModel: ChatViewModel = viewModel()
     val allListings = remember { mutableStateListOf<SkillListing>() }
 
+    val ratingSummaries by reviewViewModel.ratingSummaries.collectAsState()
+
     LaunchedEffect(Unit) {
         val loadedSkills = skillRepository.getSkills()
         allListings.clear()
         allListings.addAll(loadedSkills)
+    }
+
+    LaunchedEffect(allListings.size) {
+        reviewViewModel.loadRatingSummaries(allListings.map { it.userId }.distinct())
     }
 
     Scaffold(
@@ -143,7 +151,8 @@ fun SkillSwapApp(
                         navController.navigate("listing_detail")
                     },
                     listings = allListings,
-                    currentUserId = currentUserId
+                    currentUserId = currentUserId,
+                    ratingSummaries = ratingSummaries
                 )
             }
             composable("browse") {
@@ -154,7 +163,8 @@ fun SkillSwapApp(
                         navController.navigate("listing_detail")
                     },
                     listings = allListings,
-                    currentUserId = currentUserId
+                    currentUserId = currentUserId,
+                    ratingSummaries = ratingSummaries
                 )
             }
             composable("chat") {
@@ -181,6 +191,7 @@ fun SkillSwapApp(
                         navController.navigate("transactions")
                     },
                     authViewModel = authViewModel,
+                    reviewViewModel = reviewViewModel,
                     userListings = allListings,
                     onDeleteListing = { listingId ->
                         allListings.removeAll { it.id == listingId }
@@ -193,6 +204,7 @@ fun SkillSwapApp(
             composable("my_requests") {
                 MyRequestsScreen(
                     authViewModel = authViewModel,
+                    reviewViewModel = reviewViewModel,
                     onNavigateToChat = {
                         currentRoute = "chat"
                         navController.navigate("chat")
@@ -243,7 +255,8 @@ fun SkillSwapApp(
                             currentRoute = "chat"
                             navController.navigate("chat")
                         }
-                    }
+                    },
+                    reviewViewModel = reviewViewModel
                 )
             }
         }
