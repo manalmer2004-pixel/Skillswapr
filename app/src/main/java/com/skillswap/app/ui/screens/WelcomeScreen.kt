@@ -1,132 +1,277 @@
 package com.skillswap.app.ui.screens
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.skillswap.app.R
+import com.skillswap.app.ui.theme.SkillSwapTheme
+import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun WelcomeScreen(
     onGetStarted: () -> Unit,
     onSignIn: () -> Unit
 ) {
-    var currentPage by remember { mutableStateOf(0) }
-
-    val pages = listOf(
-        OnboardingPageData(
-            title = "Trade Time, Not Money",
-            description = "Every hour you help a neighbor earns you 1 Time Credit. Use credits to learn any skill in the community.",
-            iconEmoji = "⏱"
-        ),
-        OnboardingPageData(
-            title = "Empower Your Community",
-            description = "From clean water filtration and farming to solar panel maintenance and baking—everyone has a skill to share.",
-            iconEmoji = "🌱"
-        ),
-        OnboardingPageData(
-            title = "Fair & Equal Exchange",
-            description = "1 hour of teaching equals 1 time credit for everyone, regardless of skill type. Simple, trusted, and neighborly.",
-            iconEmoji = "🤝"
+    val pages = remember {
+        listOf(
+            WelcomePageData(
+                imageRes = R.drawable.water_repair_maintenance,
+                title = "Trade Time, Not Money",
+                description = "Every hour you help a neighbor earns you 1 Time Credit. Use credits to learn any skill in the community.",
+                contentDesc = "Water filter maintenance training"
+            ),
+            WelcomePageData(
+                imageRes = R.drawable.crop_and_soil_health,
+                title = "Empower Your Community",
+                description = "From clean water and farming to solar power and baking, everyone has a skill to share.",
+                contentDesc = "Crop rotation and soil health farming"
+            ),
+            WelcomePageData(
+                imageRes = R.drawable.solar_panel_installation,
+                title = "Fair & Equal Exchange",
+                description = "1 hour of teaching equals 1 time credit for everyone, regardless of skill. Simple, trusted, and neighborly.",
+                contentDesc = "Solar panel installation"
+            )
         )
-    )
+    }
+
+    val sampleSkills = remember {
+        listOf(
+            SampleSkillData(R.drawable.first_aid, "First Aid", "First Aid skill thumbnail"),
+            SampleSkillData(R.drawable.water_storage_device, "Water Storage", "Water Storage skill thumbnail"),
+            SampleSkillData(R.drawable.crop_and_soil_health, "Farming", "Farming skill thumbnail")
+        )
+    }
+
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
+
+    LaunchedEffect(pagerState, isDragged) {
+        if (!isDragged) {
+            while (true) {
+                delay(4000)
+                val nextPage = (pagerState.currentPage + 1) % pages.size
+                pagerState.animateScrollToPage(nextPage)
+            }
+        }
+    }
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface
-    ) { padding ->
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header Logo
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "skillswapr",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                TextButton(onClick = onSignIn) {
-                    Text("Sign In")
-                }
-            }
-
-            // Pager / Hero Content
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(vertical = 16.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(80.dp)
+                // Top ~55% Hero Section with Rounded Bottom Corners
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(420.dp)
+                        .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { pageIndex ->
+                        val page = pages[pageIndex]
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Image(
+                                painter = painterResource(id = page.imageRes),
+                                contentDescription = page.contentDesc,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+
+                            // Gradient Scrim Overlay at bottom
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(0.65f)
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.85f)
+                                            )
+                                        )
+                                    )
+                            )
+
+                            // Hero Text Content
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = page.title,
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = page.description,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // Overlaid Top Header (Logo + Sign In Button)
+                    Row(
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = pages[currentPage].iconEmoji,
-                            fontSize = 36.sp
+                            text = "skillswapr",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
                         )
+
+                        TextButton(onClick = onSignIn) {
+                            Text(
+                                text = "Sign In",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
 
-                Text(
-                    text = pages[currentPage].title,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center
-                )
+                Spacer(modifier = Modifier.height(16.dp))
 
-                Text(
-                    text = pages[currentPage].description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // Page indicators
+                // Page Indicator Dots
                 Row(
-                    modifier = Modifier.padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     repeat(pages.size) { index ->
-                        val isSelected = currentPage == index
+                        val isSelected = pagerState.currentPage == index
+                        val width by animateDpAsState(
+                            targetValue = if (isSelected) 24.dp else 8.dp,
+                            label = "indicatorWidth"
+                        )
                         Box(
                             modifier = Modifier
                                 .height(8.dp)
-                                .width(if (isSelected) 24.dp else 8.dp)
+                                .width(width)
                                 .clip(CircleShape)
                                 .background(
                                     if (isSelected) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant
+                                    else MaterialTheme.colorScheme.outlineVariant
                                 )
                         )
                     }
                 }
 
-                Surface(
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = RoundedCornerShape(12.dp)
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // "Skills you can learn" Section
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "🎁 New members receive 3 Welcome Time Credits!",
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        text = "Skills you can learn",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        sampleSkills.forEach { skill ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Image(
+                                    painter = painterResource(id = skill.imageRes),
+                                    contentDescription = skill.contentDesc,
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(RoundedCornerShape(12.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Text(
+                                    text = skill.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // TertiaryContainer Welcome Bonus Pill
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = "🎁 New members receive 3 Welcome Time Credits",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
@@ -134,9 +279,12 @@ fun WelcomeScreen(
                 }
             }
 
-            // Bottom CTA
+            // Bottom CTA Buttons
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .fillMaxWidth()
+                    .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
@@ -146,7 +294,11 @@ fun WelcomeScreen(
                         .height(52.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Text("Get Started · Join Community", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Get Started · Join Community",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
                 OutlinedButton(
@@ -156,15 +308,37 @@ fun WelcomeScreen(
                         .height(52.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Text("I already have an account", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "I already have an account",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
     }
 }
 
-private data class OnboardingPageData(
+private data class WelcomePageData(
+    val imageRes: Int,
     val title: String,
     val description: String,
-    val iconEmoji: String
+    val contentDesc: String
 )
+
+private data class SampleSkillData(
+    val imageRes: Int,
+    val label: String,
+    val contentDesc: String
+)
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 800)
+@Composable
+private fun WelcomeScreenPreview() {
+    SkillSwapTheme {
+        WelcomeScreen(
+            onGetStarted = {},
+            onSignIn = {}
+        )
+    }
+}
