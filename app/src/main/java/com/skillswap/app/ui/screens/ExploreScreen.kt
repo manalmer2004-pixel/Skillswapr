@@ -1,5 +1,6 @@
 package com.skillswap.app.ui.screens
 
+import android.text.format.DateUtils
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.skillswap.app.data.model.SkillListing
+import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.CategoryViewModel
 import com.skillswap.app.ui.viewmodel.FavoriteViewModel
 
@@ -33,11 +36,18 @@ fun ExploreScreen(
     onRequestSkill: (SkillListing) -> Unit,
     listings: List<SkillListing> = emptyList(),
     currentUserId: String = "",
+    authViewModel: AuthViewModel = viewModel(),
     categoryViewModel: CategoryViewModel = viewModel(),
     favoriteViewModel: FavoriteViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
+
+    val authState by authViewModel.uiState.collectAsState()
+    val userLocation = remember(authState.userProfile) {
+        val loc = authState.userProfile?.location ?: ""
+        if (loc.isNotBlank()) loc else "Location not set"
+    }
 
     val categoriesState by categoryViewModel.categories.collectAsState()
     val favoritesState by favoriteViewModel.favorites.collectAsState()
@@ -75,7 +85,7 @@ fun ExploreScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Nairobi, Kenya · 1.3 km radius",
+                            text = userLocation,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -148,6 +158,14 @@ fun SkillListingCard(
     onClick: () -> Unit,
     onFavoriteToggle: () -> Unit
 ) {
+    val relativeTime = remember(listing.createdAt) {
+        DateUtils.getRelativeTimeSpanString(
+            listing.createdAt,
+            System.currentTimeMillis(),
+            DateUtils.MINUTE_IN_MILLIS
+        ).toString()
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -233,11 +251,51 @@ fun SkillListingCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = listing.teacherName.ifBlank { "Neighbor" },
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = listing.teacherName.ifBlank { "Neighbor" },
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text("·", style = MaterialTheme.typography.labelSmall)
+
+                    if (listing.reviewCount > 0 && listing.teacherRating > 0.0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "${listing.teacherRating}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "New",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+
+                    Text("· $relativeTime", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
 
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,

@@ -9,8 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddPhotoAlternate
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.data.repository.StorageRepository
+import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.CategoryViewModel
 import kotlinx.coroutines.launch
 
@@ -34,8 +35,12 @@ fun CreateListingScreen(
     currentUserName: String,
     onDismiss: () -> Unit,
     onPublish: (SkillListing) -> Unit,
+    authViewModel: AuthViewModel = viewModel(),
     categoryViewModel: CategoryViewModel = viewModel()
 ) {
+    val authUiState by authViewModel.uiState.collectAsState()
+    val userProfile = authUiState.userProfile
+
     val categoriesState by categoryViewModel.categories.collectAsState()
     val categories = remember(categoriesState) {
         if (categoriesState.isEmpty()) listOf("Water & Sanitation", "Cooking", "Gardening", "Other")
@@ -68,7 +73,7 @@ fun CreateListingScreen(
                 title = { Text("Post a Skill Swap") },
                 navigationIcon = {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -256,7 +261,10 @@ fun CreateListingScreen(
                                 creditCost = estimatedHours,
                                 toolsProvided = toolsProvidedInput.split(",").map { it.trim() }.filter { it.isNotBlank() },
                                 teacherName = currentUserName,
-                                teacherRating = 0.0
+                                teacherRating = userProfile?.rating ?: 0.0,
+                                reviewCount = userProfile?.reviewCount ?: 0,
+                                locationArea = userProfile?.location ?: "",
+                                createdAt = System.currentTimeMillis()
                             )
                             isPublishing = false
                             onPublish(newListing)
