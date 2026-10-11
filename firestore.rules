@@ -22,22 +22,30 @@ service cloud.firestore {
         && request.resource.data.timeCreditBalance == 3.0
         && request.resource.data.isAdmin == false
         && request.resource.data.isVerified == false
-        && request.resource.data.rating == 0
+        && request.resource.data.rating == 0.0
         && request.resource.data.reviewCount == 0;
 
-      allow update: if isOwner(userId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['timeCreditBalance', 'rating', 'reviewCount', 'isAdmin', 'isVerified', 'lastSwapId'])
+      // Owner edits profile fields only; credit changes only through a completing swap.
+      allow update: if (isOwner(userId)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['timeCreditBalance', 'rating', 'reviewCount', 'isAdmin', 'isVerified', 'lastSwapId']))
         || isSwapCreditTransfer(userId);
 
-      allow delete: if isOwner(userId);
+      // No deleting: stops "delete profile + sign up again" for free credits.
+      allow delete: if false;
     }
 
     function isSwapCreditTransfer(userId) {
       let lastSwapId = request.resource.data.lastSwapId;
-      let reqBefore = get(/databases/$(database)/documents/swapRequests/$(lastSwapId)).data;
-      let reqAfter = getAfter(/databases/$(database)/documents/swapRequests/$(lastSwapId)).data;
+      let swapPath = /databases/$(database)/documents/swapRequests/$(lastSwapId);
+      let reqBefore = get(swapPath).data;
+      let reqAfter = getAfter(swapPath).data;
 
-      return lastSwapId is string
+      return isSignedIn()
+        // ONLY these two fields may change (blocks setting isAdmin, rating, etc. in the same write)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timeCreditBalance', 'lastSwapId'])
+        && request.resource.data.timeCreditBalance >= 0
+        && lastSwapId is string
+        && (request.auth.uid == reqAfter.requesterId || request.auth.uid == reqAfter.providerId)
         && reqBefore.status == 'ACCEPTED'
         && reqAfter.status == 'COMPLETED'
         && (
@@ -54,8 +62,7 @@ service cloud.firestore {
     // --- 2. TRANSACTIONS COLLECTION ---
     match /transactions/{transactionId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-
-      allow create: if isBonusTransaction(transactionId) || isSwapTransaction(transactionId);
+      allow create: if isSignedIn() && (isBonusTransaction(transactionId) || isSwapTransaction(transactionId));
       allow update, delete: if false;
     }
 
@@ -82,25 +89,42 @@ service cloud.firestore {
     }
 
     // --- 3. SWAP REQUESTS COLLECTION ---
+    // Completing a swap is only allowed if BOTH users' balances move by durationHours in the same write.
+    function creditsMoved(requestId, req) {
+      let requesterPath = /databases/$(database)/documents/users/$(req.requesterId);
+      let providerPath = /databases/$(database)/documents/users/$(req.providerId);
+      return getAfter(requesterPath).data.lastSwapId == requestId
+        && getAfter(providerPath).data.lastSwapId == requestId
+        && getAfter(requesterPath).data.timeCreditBalance == get(requesterPath).data.timeCreditBalance - req.durationHours
+        && getAfter(providerPath).data.timeCreditBalance == get(providerPath).data.timeCreditBalance + req.durationHours;
+    }
+
     match /swapRequests/{requestId} {
       allow read: if isSignedIn() && (resource.data.requesterId == request.auth.uid || resource.data.providerId == request.auth.uid);
 
       allow create: if isSignedIn()
         && request.resource.data.requesterId == request.auth.uid
         && request.resource.data.status == 'PENDING'
-        && request.resource.data.requesterId != request.resource.data.providerId;
+        && request.resource.data.requesterId != request.resource.data.providerId
+        // a negative or huge duration would let someone mint credits
+        && request.resource.data.durationHours > 0
+        && request.resource.data.durationHours <= 8;
 
       allow update: if isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
         && (
           // Provider accepts or declines
-          (request.auth.uid == resource.data.providerId && resource.data.status == 'PENDING' && (request.resource.data.status == 'ACCEPTED' || request.resource.data.status == 'DECLINED'))
+          (request.auth.uid == resource.data.providerId && resource.data.status == 'PENDING'
+            && (request.resource.data.status == 'ACCEPTED' || request.resource.data.status == 'DECLINED'))
           ||
           // Requester cancels
-          (request.auth.uid == resource.data.requesterId && resource.data.status == 'PENDING' && request.resource.data.status == 'CANCELLED')
+          (request.auth.uid == resource.data.requesterId && resource.data.status == 'PENDING'
+            && request.resource.data.status == 'CANCELLED')
           ||
-          // Either participant completes
-          ((request.auth.uid == resource.data.requesterId || request.auth.uid == resource.data.providerId) && resource.data.status == 'ACCEPTED' && request.resource.data.status == 'COMPLETED')
+          // Either participant completes, and credits must move
+          ((request.auth.uid == resource.data.requesterId || request.auth.uid == resource.data.providerId)
+            && resource.data.status == 'ACCEPTED' && request.resource.data.status == 'COMPLETED'
+            && creditsMoved(requestId, resource.data))
         );
 
       allow delete: if false;
@@ -157,6 +181,7 @@ service cloud.firestore {
     // --- 7. NOTIFICATIONS COLLECTION ---
     match /notifications/{notificationId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // you notify the OTHER person, never yourself
       allow create: if isSignedIn() && request.resource.data.userId != request.auth.uid;
       allow update: if isSignedIn()
         && resource.data.userId == request.auth.uid
