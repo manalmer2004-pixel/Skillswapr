@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.*
 import com.skillswap.app.data.model.SkillListing
+import com.skillswap.app.data.repository.CategoryRepository
 import com.skillswap.app.data.repository.SkillRepository
 import com.skillswap.app.ui.screens.*
 import com.skillswap.app.ui.viewmodel.AuthViewModel
@@ -38,6 +39,11 @@ fun SkillSwapApp(
     val allListings = remember { mutableStateListOf<SkillListing>() }
 
     val ratingSummaries by reviewViewModel.ratingSummaries.collectAsState()
+
+    val isAdmin = authUiState.userProfile?.isAdmin == true
+    LaunchedEffect(isAdmin) {
+        if (isAdmin) CategoryRepository().seedIfEmpty()
+    }
 
     LaunchedEffect(Unit) {
         val loadedSkills = skillRepository.getSkills()
