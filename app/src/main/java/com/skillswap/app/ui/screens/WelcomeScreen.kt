@@ -4,7 +4,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.skillswap.app.R
 import com.skillswap.app.ui.theme.SkillSwapTheme
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -68,17 +68,7 @@ fun WelcomeScreen(
     }
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
-    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
-
-    LaunchedEffect(pagerState, isDragged) {
-        if (!isDragged) {
-            while (true) {
-                delay(4000)
-                val nextPage = (pagerState.currentPage + 1) % pages.size
-                pagerState.animateScrollToPage(nextPage)
-            }
-        }
-    }
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -210,6 +200,11 @@ fun WelcomeScreen(
                                     if (isSelected) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.outlineVariant
                                 )
+                                .clickable {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(index)
+                                    }
+                                }
                         )
                     }
                 }
