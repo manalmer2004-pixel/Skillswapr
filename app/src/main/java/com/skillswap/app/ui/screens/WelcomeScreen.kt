@@ -2,7 +2,6 @@ package com.skillswap.app.ui.screens
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,12 +19,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.skillswap.app.R
 import com.skillswap.app.ui.theme.SkillSwapTheme
 import kotlinx.coroutines.launch
@@ -36,6 +37,8 @@ fun WelcomeScreen(
     onGetStarted: () -> Unit,
     onSignIn: () -> Unit
 ) {
+    val context = LocalContext.current
+
     val pages = remember {
         listOf(
             WelcomePageData(
@@ -95,12 +98,20 @@ fun WelcomeScreen(
                 ) {
                     HorizontalPager(
                         state = pagerState,
+                        beyondBoundsPageCount = 1,
                         modifier = Modifier.fillMaxSize()
                     ) { pageIndex ->
                         val page = pages[pageIndex]
+                        val imageModel = remember(page.imageRes, context) {
+                            ImageRequest.Builder(context)
+                                .data(page.imageRes)
+                                .crossfade(true)
+                                .build()
+                        }
+
                         Box(modifier = Modifier.fillMaxSize()) {
-                            Image(
-                                painter = painterResource(id = page.imageRes),
+                            AsyncImage(
+                                model = imageModel,
                                 contentDescription = page.contentDesc,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -232,11 +243,18 @@ fun WelcomeScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         sampleSkills.forEach { skill ->
+                            val skillImageModel = remember(skill.imageRes, context) {
+                                ImageRequest.Builder(context)
+                                    .data(skill.imageRes)
+                                    .crossfade(true)
+                                    .build()
+                            }
+
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Image(
-                                    painter = painterResource(id = skill.imageRes),
+                                AsyncImage(
+                                    model = skillImageModel,
                                     contentDescription = skill.contentDesc,
                                     modifier = Modifier
                                         .size(64.dp)
@@ -306,7 +324,7 @@ fun WelcomeScreen(
                     Text(
                         text = "I already have an account",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
