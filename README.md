@@ -1,30 +1,23 @@
-# SkillSwap — Native Android Studio Project
+# SkillSwap Android App
 
-This is a complete, native Android project built with **Jetpack Compose**, **Kotlin Coroutines**, **Room Database**, and **Material 3**.
+SkillSwap is a community time-banking Android application built with Kotlin, Jetpack Compose, Coroutines/Flow, and Firebase Firestore.
 
----
+## Firebase setup
 
-### How to Run in Android Studio
+1. **Publish Security Rules**:
+   - Open the [Firebase Console](https://console.firebase.google.com/).
+   - Navigate to **Build** $\rightarrow$ **Firestore Database** $\rightarrow$ **Rules**.
+   - Copy the contents of `firestore.rules` and paste them into the online editor.
+   - Click **Publish**.
 
-1. **Unzip this archive**:
-   Extract `SkillSwap-Android` to your workspace (e.g. `~/AndroidStudioProjects/SkillSwap-Android`).
+2. **Create Composite Indexes**:
+   - In **Firestore Database**, navigate to the **Indexes** tab.
+   - Click **Add Index** and create the following composite indexes:
+     - **Collection**: `transactions` | **Fields**: `userId` (ASC), `createdAt` (DESC)
+     - **Collection**: `notifications` | **Fields**: `userId` (ASC), `createdAt` (DESC)
 
-2. **Open in Android Studio**:
-   - Launch Android Studio.
-   - Click **File ➔ Open...**
-   - Select the `SkillSwap-Android` folder and click **OK**.
-
-3. **Sync Gradle**:
-   - Android Studio will automatically recognize the Gradle build files and sync dependencies.
-
-4. **Run the App**:
-   - Choose an Android Emulator (API 26+) or connect your physical Android device.
-   - Click the green **Run (▶)** button (or press `Shift + F10`).
-
----
-
-### Features Included
-- **Equal-Time Banking**: 1 Hour Teaching = 1 Time Credit.
-- **Welcome & Auth**: 3-step carousel with Sign Up (+3 bonus credits) and Sign In.
-- **Jetpack Compose Navigation**: Tabbed bottom navigation and single-activity architecture.
-- **Material 3 Dynamic Theming**: Dark & Light theme support.
+3. **Administrator & Category Seeding Setup**:
+   - Register the first user account in the app.
+   - Open **Firebase Console** $\rightarrow$ **Firestore Database** $\rightarrow$ `users` collection.
+   - Select the document for your first user and manually set the field `isAdmin = true` (type: `boolean`).
+   - Log in as that administrator in the app. Upon accessing categories, the default skill categories will automatically seed into the `categories` collection in Firestore.

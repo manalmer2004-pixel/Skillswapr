@@ -23,7 +23,7 @@ data class UserProfile(
     val skillsOffered: List<String> = emptyList(),
     val skillsWanted: List<String> = emptyList(),
     val badges: List<String> = emptyList(),
-    @get:PropertyName("isVerified") val isVerified: Boolean = true,
+    @get:PropertyName("isVerified") val isVerified: Boolean = false,
     @get:PropertyName("isAdmin") val isAdmin: Boolean = false,
     val lastSwapId: String = ""
 )

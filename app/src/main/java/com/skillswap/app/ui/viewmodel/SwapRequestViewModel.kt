@@ -58,9 +58,9 @@ class SwapRequestViewModel(
         }
     }
 
-    fun updateStatus(requestId: String, newStatus: SwapRequestStatus) {
+    fun updateStatus(requestId: String, newStatus: SwapRequestStatus, callerId: String) {
         viewModelScope.launch {
-            val result = repository.updateStatus(requestId, newStatus)
+            val result = repository.updateStatus(requestId, newStatus, callerId)
             if (result.isFailure) {
                 _actionResult.value = result.exceptionOrNull()?.message ?: "Operation failed"
             } else {

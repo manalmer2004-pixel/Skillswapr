@@ -13,12 +13,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.firebase.firestore.FirebaseFirestore
 import com.skillswap.app.data.model.Review
 import com.skillswap.app.data.model.SwapRequest
 import com.skillswap.app.data.model.SwapRequestStatus
 import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.ReviewViewModel
 import com.skillswap.app.ui.viewmodel.SwapRequestViewModel
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun MyRequestsScreen(
@@ -171,9 +173,10 @@ fun MyRequestsScreen(
                     items(currentList, key = { it.id }) { request ->
                         SwapRequestCard(
                             request = request,
+                            currentUserId = userId,
                             isReceived = selectedTab == 1,
                             onUpdateStatus = { status ->
-                                requestViewModel.updateStatus(request.id, status)
+                                requestViewModel.updateStatus(request.id, status, userId)
                             },
                             onOpenReview = {
                                 requestToReview = request
@@ -189,10 +192,23 @@ fun MyRequestsScreen(
 @Composable
 fun SwapRequestCard(
     request: SwapRequest,
+    currentUserId: String,
     isReceived: Boolean,
     onUpdateStatus: (SwapRequestStatus) -> Unit,
     onOpenReview: () -> Unit
 ) {
+    var hasBeenReviewed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(request.id, currentUserId) {
+        if (currentUserId.isNotBlank() && request.status == SwapRequestStatus.COMPLETED) {
+            try {
+                val docId = "${request.id}_${currentUserId}"
+                val doc = FirebaseFirestore.getInstance().collection("reviews").document(docId).get().await()
+                hasBeenReviewed = doc.exists()
+            } catch (_: Exception) {}
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp)
@@ -276,11 +292,31 @@ fun SwapRequestCard(
                 }
             } else if (request.status == SwapRequestStatus.COMPLETED) {
                 Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = onOpenReview,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Leave Review")
+                if (hasBeenReviewed) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(10.dp)
+                        ) {
+                            Text(
+                                text = "✓ Reviewed",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onOpenReview,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Leave Review")
+                    }
                 }
             }
         }

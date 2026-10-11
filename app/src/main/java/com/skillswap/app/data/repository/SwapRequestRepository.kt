@@ -72,7 +72,7 @@ class SwapRequestRepository(
         awaitClose { listener.remove() }
     }
 
-    suspend fun updateStatus(requestId: String, newStatus: SwapRequestStatus): Result<Unit> {
+    suspend fun updateStatus(requestId: String, newStatus: SwapRequestStatus, callerId: String): Result<Unit> {
         return try {
             if (newStatus == SwapRequestStatus.COMPLETED) {
                 firestore.runTransaction { transaction ->
@@ -142,22 +142,19 @@ class SwapRequestRepository(
                     )
                     transaction.set(earnedTxRef, earnedTx)
 
-                    val notif1Ref = firestore.collection("notifications").document()
-                    transaction.set(notif1Ref, NotificationItem(
-                        id = notif1Ref.id,
-                        userId = request.requesterId,
+                    val otherUserId = if (callerId == request.requesterId) request.providerId else request.requesterId
+                    val notifRef = firestore.collection("notifications").document()
+                    val notifMessage = if (otherUserId == request.providerId) {
+                        "Completed swap '${request.skillTitle}'. +$duration credits earned!"
+                    } else {
+                        "Completed swap '${request.skillTitle}'. -$duration credits."
+                    }
+                    transaction.set(notifRef, NotificationItem(
+                        id = notifRef.id,
+                        userId = otherUserId,
                         type = NotificationType.REQUEST_COMPLETED,
                         refId = requestId,
-                        message = "Completed swap '${request.skillTitle}'. -$duration credits."
-                    ))
-
-                    val notif2Ref = firestore.collection("notifications").document()
-                    transaction.set(notif2Ref, NotificationItem(
-                        id = notif2Ref.id,
-                        userId = request.providerId,
-                        type = NotificationType.REQUEST_COMPLETED,
-                        refId = requestId,
-                        message = "Completed swap '${request.skillTitle}'. +$duration credits earned!"
+                        message = notifMessage
                     ))
                 }.await()
             } else {
@@ -178,14 +175,16 @@ class SwapRequestRepository(
                         SwapRequestStatus.CANCELLED -> NotificationType.REQUEST_CANCELLED
                         else -> NotificationType.REQUEST_CREATED
                     }
-                    firestore.collection("notifications").add(
-                        NotificationItem(
-                            userId = targetUserId,
-                            type = type,
-                            refId = requestId,
-                            message = "Your request for '${request.skillTitle}' was ${newStatus.name.lowercase()}."
-                        )
-                    ).await()
+                    if (targetUserId != callerId) {
+                        firestore.collection("notifications").add(
+                            NotificationItem(
+                                userId = targetUserId,
+                                type = type,
+                                refId = requestId,
+                                message = "Your request for '${request.skillTitle}' was ${newStatus.name.lowercase()}."
+                            )
+                        ).await()
+                    }
                 }
             }
             Result.success(Unit)
