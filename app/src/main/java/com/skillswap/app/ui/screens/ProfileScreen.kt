@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +22,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.NotificationViewModel
+import com.skillswap.app.ui.viewmodel.ReviewViewModel
+import java.util.Locale
 
 @Composable
 fun ProfileScreen(
@@ -30,6 +33,7 @@ fun ProfileScreen(
     onNavigateToTransactions: () -> Unit = {},
     authViewModel: AuthViewModel = viewModel(),
     notifViewModel: NotificationViewModel = viewModel(),
+    reviewViewModel: ReviewViewModel = viewModel(),
     userListings: List<SkillListing> = emptyList(),
     onDeleteListing: (String) -> Unit = {}
 ) {
@@ -40,9 +44,13 @@ fun ProfileScreen(
     val notifications by notifViewModel.notifications.collectAsState()
     val unreadNotifCount = remember(notifications) { notifications.count { !it.read } }
 
+    val ratingSummary by reviewViewModel.ratingSummary.collectAsState()
+    val (avgRating, reviewCount) = ratingSummary
+
     LaunchedEffect(currentUserId) {
         if (currentUserId.isNotBlank()) {
             notifViewModel.loadNotifications(currentUserId)
+            reviewViewModel.loadRatingSummary(currentUserId)
         }
     }
 
@@ -175,6 +183,40 @@ fun ProfileScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    if (reviewCount > 0L && avgRating > 0.0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "★ ${String.format(Locale.US, "%.1f", avgRating)} ($reviewCount reviews)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    } else {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.padding(top = 6.dp)
+                        ) {
+                            Text(
+                                text = "New Member",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 

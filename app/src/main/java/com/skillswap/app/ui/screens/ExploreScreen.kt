@@ -28,6 +28,7 @@ import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.CategoryViewModel
 import com.skillswap.app.ui.viewmodel.FavoriteViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +37,7 @@ fun ExploreScreen(
     onRequestSkill: (SkillListing) -> Unit,
     listings: List<SkillListing> = emptyList(),
     currentUserId: String = "",
+    ratingSummaries: Map<String, Pair<Double, Long>> = emptyMap(),
     authViewModel: AuthViewModel = viewModel(),
     categoryViewModel: CategoryViewModel = viewModel(),
     favoriteViewModel: FavoriteViewModel = viewModel()
@@ -135,9 +137,11 @@ fun ExploreScreen(
             ) {
                 items(filteredListings, key = { it.id }) { listing ->
                     val isFavorite = favoriteSkillIds.contains(listing.id)
+                    val ratingSummary = ratingSummaries[listing.userId] ?: Pair(0.0, 0L)
                     SkillListingCard(
                         listing = listing,
                         isFavorite = isFavorite,
+                        ratingSummary = ratingSummary,
                         onClick = { onSelectSkill(listing) },
                         onFavoriteToggle = {
                             if (currentUserId.isNotBlank()) {
@@ -155,6 +159,7 @@ fun ExploreScreen(
 fun SkillListingCard(
     listing: SkillListing,
     isFavorite: Boolean,
+    ratingSummary: Pair<Double, Long>,
     onClick: () -> Unit,
     onFavoriteToggle: () -> Unit
 ) {
@@ -165,6 +170,8 @@ fun SkillListingCard(
             DateUtils.MINUTE_IN_MILLIS
         ).toString()
     }
+
+    val (avgRating, reviewCount) = ratingSummary
 
     Card(
         modifier = Modifier
@@ -262,7 +269,7 @@ fun SkillListingCard(
                     )
                     Text("·", style = MaterialTheme.typography.labelSmall)
 
-                    if (listing.reviewCount > 0 && listing.teacherRating > 0.0) {
+                    if (reviewCount > 0L && avgRating > 0.0) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -274,7 +281,7 @@ fun SkillListingCard(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = "${listing.teacherRating}",
+                                text = String.format(Locale.US, "%.1f", avgRating),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )

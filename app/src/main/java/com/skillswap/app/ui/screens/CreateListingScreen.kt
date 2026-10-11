@@ -261,8 +261,6 @@ fun CreateListingScreen(
                                 creditCost = estimatedHours,
                                 toolsProvided = toolsProvidedInput.split(",").map { it.trim() }.filter { it.isNotBlank() },
                                 teacherName = currentUserName,
-                                teacherRating = userProfile?.rating ?: 0.0,
-                                reviewCount = userProfile?.reviewCount ?: 0,
                                 locationArea = userProfile?.location ?: "",
                                 createdAt = System.currentTimeMillis()
                             )

@@ -22,6 +22,7 @@ fun BrowseScreen(
     onSelectSkill: (SkillListing) -> Unit = {},
     listings: List<SkillListing> = emptyList(),
     currentUserId: String = "",
+    ratingSummaries: Map<String, Pair<Double, Long>> = emptyMap(),
     categoryViewModel: CategoryViewModel = viewModel(),
     favoriteViewModel: FavoriteViewModel = viewModel()
 ) {
@@ -122,9 +123,11 @@ fun BrowseScreen(
         ) {
             items(filteredListings, key = { it.id }) { listing ->
                 val isFavorite = favoriteSkillIds.contains(listing.id)
+                val ratingSummary = ratingSummaries[listing.userId] ?: Pair(0.0, 0L)
                 SkillListingCard(
                     listing = listing,
                     isFavorite = isFavorite,
+                    ratingSummary = ratingSummary,
                     onClick = { onSelectSkill(listing) },
                     onFavoriteToggle = {
                         if (currentUserId.isNotBlank()) {

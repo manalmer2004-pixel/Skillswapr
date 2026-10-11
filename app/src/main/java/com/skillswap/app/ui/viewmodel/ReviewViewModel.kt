@@ -22,6 +22,9 @@ class ReviewViewModel(
     private val _ratingSummary = MutableStateFlow<Pair<Double, Long>>(Pair(0.0, 0L))
     val ratingSummary: StateFlow<Pair<Double, Long>> = _ratingSummary.asStateFlow()
 
+    private val _ratingSummaries = MutableStateFlow<Map<String, Pair<Double, Long>>>(emptyMap())
+    val ratingSummaries: StateFlow<Map<String, Pair<Double, Long>>> = _ratingSummaries.asStateFlow()
+
     fun submitReview(review: Review, onComplete: () -> Unit) {
         viewModelScope.launch {
             _isSubmitting.value = true
@@ -37,9 +40,18 @@ class ReviewViewModel(
     }
 
     fun loadRatingSummary(userId: String) {
+        if (userId.isBlank()) return
         viewModelScope.launch {
             val summary = repository.getRatingSummary(userId)
             _ratingSummary.value = summary
+        }
+    }
+
+    fun loadRatingSummaries(userIds: List<String>) {
+        if (userIds.isEmpty()) return
+        viewModelScope.launch {
+            val summaries = repository.getRatingSummaries(userIds)
+            _ratingSummaries.value = summaries
         }
     }
 

@@ -11,7 +11,11 @@ class SkillRepository(
         return try {
             val snapshot = firestore.collection("skills").get().await()
             snapshot.documents.mapNotNull { doc ->
-                doc.toObject(SkillListing::class.java)
+                try {
+                    doc.toObject(SkillListing::class.java)
+                } catch (e: Exception) {
+                    null
+                }
             }
         } catch (e: Exception) {
             emptyList()

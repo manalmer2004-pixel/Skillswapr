@@ -23,7 +23,5 @@ data class SkillListing(
     val createdAt: Long = System.currentTimeMillis(),
     val teacherName: String = "",
     val teacherAvatar: String = "",
-    val teacherRating: Double = 0.0,
-    val reviewCount: Int = 0,
     val saved: Boolean = false
 )

@@ -30,7 +30,9 @@ import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.data.model.SwapRequest
 import com.skillswap.app.data.model.UserAvailability
 import com.skillswap.app.ui.viewmodel.AvailabilityViewModel
+import com.skillswap.app.ui.viewmodel.ReviewViewModel
 import com.skillswap.app.ui.viewmodel.SwapRequestViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,7 +43,8 @@ fun ListingDetailScreen(
     onNavigateToRequests: () -> Unit = {},
     onStartChat: (String) -> Unit = {},
     requestViewModel: SwapRequestViewModel = viewModel(),
-    availabilityViewModel: AvailabilityViewModel = viewModel()
+    availabilityViewModel: AvailabilityViewModel = viewModel(),
+    reviewViewModel: ReviewViewModel = viewModel()
 ) {
     val isOwner = currentUserId.isNotBlank() && currentUserId == listing.userId
     val snackbarHostState = remember { SnackbarHostState() }
@@ -56,10 +59,13 @@ fun ListingDetailScreen(
     var newEndTime by remember { mutableStateOf("17:00") }
 
     val teacherAvailabilities by availabilityViewModel.availabilities.collectAsState()
+    val ratingSummary by reviewViewModel.ratingSummary.collectAsState()
+    val (avgRating, reviewCount) = ratingSummary
 
     LaunchedEffect(listing.userId) {
         if (listing.userId.isNotBlank()) {
             availabilityViewModel.loadAvailability(listing.userId)
+            reviewViewModel.loadRatingSummary(listing.userId)
         }
     }
 
@@ -321,7 +327,7 @@ fun ListingDetailScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            if (listing.reviewCount > 0 && listing.teacherRating > 0.0) {
+                            if (reviewCount > 0L && avgRating > 0.0) {
                                 Icon(
                                     Icons.Default.Star,
                                     contentDescription = null,
@@ -329,8 +335,9 @@ fun ListingDetailScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = "${listing.teacherRating} (${listing.reviewCount})",
-                                    style = MaterialTheme.typography.labelSmall
+                                    text = "★ ${String.format(Locale.US, "%.1f", avgRating)} ($reviewCount reviews)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
                                 )
                             } else {
                                 Surface(
@@ -338,7 +345,7 @@ fun ListingDetailScreen(
                                     shape = RoundedCornerShape(4.dp)
                                 ) {
                                     Text(
-                                        text = "New Member",
+                                        text = "New",
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
