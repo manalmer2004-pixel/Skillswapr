@@ -26,11 +26,11 @@ fun NotificationsScreen(
     notifViewModel: NotificationViewModel = viewModel()
 ) {
     val authState by authViewModel.uiState.collectAsState()
-    val userId = authState.userProfile?.id ?: "user_maya"
+    val userId = authState.userProfile?.id ?: ""
     val notifications by notifViewModel.notifications.collectAsState()
 
     LaunchedEffect(userId) {
-        notifViewModel.loadNotifications(userId)
+        if (userId.isNotBlank()) notifViewModel.loadNotifications(userId)
     }
 
     Column(
@@ -46,7 +46,18 @@ fun NotificationsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (notifications.isEmpty()) {
+        if (userId.isBlank()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Please sign in to view notifications",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else if (notifications.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center

@@ -24,11 +24,11 @@ fun TransactionHistoryScreen(
     txViewModel: TransactionViewModel = viewModel()
 ) {
     val authState by authViewModel.uiState.collectAsState()
-    val userId = authState.userProfile?.id ?: "user_maya"
+    val userId = authState.userProfile?.id ?: ""
     val transactions by txViewModel.transactions.collectAsState()
 
     LaunchedEffect(userId) {
-        txViewModel.loadTransactions(userId)
+        if (userId.isNotBlank()) txViewModel.loadTransactions(userId)
     }
 
     Column(
@@ -44,7 +44,18 @@ fun TransactionHistoryScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (transactions.isEmpty()) {
+        if (userId.isBlank()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Please sign in to view transaction history",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else if (transactions.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
