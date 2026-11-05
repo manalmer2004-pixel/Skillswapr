@@ -12,30 +12,46 @@ class SwapRequestRepository(
 ) {
     suspend fun createSwapRequest(request: SwapRequest): Result<String> {
         return try {
+            if (request.requesterId.isBlank()) {
+                return Result.failure(Exception("Please sign in to request a skill swap"))
+            }
+            if (request.providerId.isBlank()) {
+                return Result.failure(Exception("This skill listing has an invalid provider"))
+            }
             if (request.requesterId == request.providerId) {
-                return Result.failure(Exception("Requester cannot be the provider for a swap request"))
+                return Result.failure(Exception("You cannot request a swap on your own skill listing"))
             }
 
             val learnerDoc = firestore.collection("users").document(request.requesterId).get().await()
-            val learnerProfile = learnerDoc.toObject(UserProfile::class.java)
-            val balance = learnerProfile?.timeCreditBalance ?: 0.0
+            val balance = if (learnerDoc.exists()) {
+                learnerDoc.getDouble("timeCreditBalance") ?: 3.0
+            } else {
+                3.0
+            }
 
             if (balance < request.durationHours) {
-                return Result.failure(Exception("Insufficient time credit balance for this request"))
+                return Result.failure(Exception("Insufficient time credit balance ($balance credits available, ${request.durationHours} required)"))
             }
 
             val docRef = firestore.collection("swapRequests").document()
             val requestId = docRef.id
-            val requestWithId = request.copy(id = requestId)
+            val requestWithId = request.copy(id = requestId, status = SwapRequestStatus.PENDING)
             docRef.set(requestWithId).await()
 
-            val notification = NotificationItem(
-                userId = request.providerId,
-                type = NotificationType.REQUEST_CREATED,
-                refId = requestId,
-                message = "New swap request for '${request.skillTitle}'"
-            )
-            firestore.collection("notifications").add(notification).await()
+            if (request.providerId.isNotBlank() && request.providerId != request.requesterId) {
+                try {
+                    val notification = NotificationItem(
+                        userId = request.providerId,
+                        type = NotificationType.REQUEST_CREATED,
+                        refId = requestId,
+                        message = "New swap request for '${request.skillTitle}'"
+                    )
+                    firestore.collection("notifications").add(notification).await()
+                } catch (_: Exception) {
+                    // Notification creation failure should not break swap request creation
+                }
+            }
+
             Result.success(requestId)
         } catch (e: Exception) {
             Result.failure(e)
@@ -43,6 +59,12 @@ class SwapRequestRepository(
     }
 
     fun getSwapRequestsFlow(userId: String): Flow<List<SwapRequest>> = callbackFlow {
+        if (userId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
         val listener = firestore.collection("swapRequests")
             .whereEqualTo("requesterId", userId)
             .addSnapshotListener { snapshot, error ->
@@ -58,6 +80,12 @@ class SwapRequestRepository(
     }
 
     fun getReceivedRequestsFlow(userId: String): Flow<List<SwapRequest>> = callbackFlow {
+        if (userId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
         val listener = firestore.collection("swapRequests")
             .whereEqualTo("providerId", userId)
             .addSnapshotListener { snapshot, error ->

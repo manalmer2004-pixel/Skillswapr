@@ -1,7 +1,6 @@
 package com.skillswap.app.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import com.skillswap.app.data.model.NotificationItem
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -12,15 +11,23 @@ class NotificationRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     fun getNotificationsFlow(userId: String): Flow<List<NotificationItem>> = callbackFlow {
+        if (userId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
         val listener = firestore.collection("notifications")
             .whereEqualTo("userId", userId)
-            .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
                     return@addSnapshotListener
                 }
-                val notifs = snapshot?.documents?.mapNotNull { it.toObject(NotificationItem::class.java) } ?: emptyList()
+                val notifs = snapshot?.documents
+                    ?.mapNotNull { it.toObject(NotificationItem::class.java) }
+                    ?.sortedByDescending { it.createdAt }
+                    ?: emptyList()
                 trySend(notifs)
             }
 
@@ -28,6 +35,7 @@ class NotificationRepository(
     }
 
     suspend fun markAsRead(notificationId: String): Boolean {
+        if (notificationId.isBlank()) return false
         return try {
             firestore.collection("notifications")
                 .document(notificationId)

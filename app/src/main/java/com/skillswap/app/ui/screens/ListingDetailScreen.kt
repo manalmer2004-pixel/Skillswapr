@@ -32,6 +32,7 @@ import com.skillswap.app.data.model.UserAvailability
 import com.skillswap.app.ui.viewmodel.AvailabilityViewModel
 import com.skillswap.app.ui.viewmodel.ReviewViewModel
 import com.skillswap.app.ui.viewmodel.SwapRequestViewModel
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +48,7 @@ fun ListingDetailScreen(
     reviewViewModel: ReviewViewModel = viewModel()
 ) {
     val isOwner = currentUserId.isNotBlank() && currentUserId == listing.userId
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showRequestDialog by remember { mutableStateOf(false) }
@@ -61,6 +63,15 @@ fun ListingDetailScreen(
     val teacherAvailabilities by availabilityViewModel.availabilities.collectAsState()
     val ratingSummary by reviewViewModel.ratingSummary.collectAsState()
     val (avgRating, reviewCount) = ratingSummary
+
+    val actionResult by requestViewModel.actionResult.collectAsState()
+
+    LaunchedEffect(actionResult) {
+        actionResult?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            requestViewModel.clearActionResult()
+        }
+    }
 
     LaunchedEffect(listing.userId) {
         if (listing.userId.isNotBlank()) {
@@ -100,6 +111,18 @@ fun ListingDetailScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        if (currentUserId.isBlank()) {
+                            scope.launch { snackbarHostState.showSnackbar("Please sign in to request a swap") }
+                            return@Button
+                        }
+                        if (listing.userId.isBlank()) {
+                            scope.launch { snackbarHostState.showSnackbar("This skill listing has an invalid provider") }
+                            return@Button
+                        }
+                        if (currentUserId == listing.userId) {
+                            scope.launch { snackbarHostState.showSnackbar("You cannot request a swap on your own skill listing") }
+                            return@Button
+                        }
                         showRequestDialog = false
                         val request = SwapRequest(
                             requesterId = currentUserId,
