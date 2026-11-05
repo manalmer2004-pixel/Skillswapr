@@ -16,27 +16,30 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
+import com.skillswap.app.BuildConfig
 import com.skillswap.app.R
 import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.CategoryViewModel
 import com.skillswap.app.ui.viewmodel.MapViewModel
 import com.skillswap.app.util.LocationUtils
-import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +51,7 @@ fun MapScreen(
     mapViewModel: MapViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val uiState by mapViewModel.uiState.collectAsState()
     val authState by authViewModel.uiState.collectAsState()
     val categoriesState by categoryViewModel.categories.collectAsState()
@@ -73,7 +77,31 @@ fun MapScreen(
         mapViewModel.checkPermissionAndFetchLocation()
     }
 
-    // Move camera when mapCenter changes
+    // Automatically request location permission on open if not granted
+    LaunchedEffect(Unit) {
+        if (!uiState.hasLocationPermission) {
+            permissionLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    // Re-check permissions and location on ON_RESUME
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                mapViewModel.checkPermissionAndFetchLocation()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Move camera when user position changes
     LaunchedEffect(uiState.userLatitude, uiState.userLongitude) {
         if (uiState.userLatitude != null && uiState.userLongitude != null) {
             cameraPositionState.animate(
@@ -85,11 +113,11 @@ fun MapScreen(
         }
     }
 
-    // Detect camera movement / panned state
+    // Detect user gesture panning (ignore programmatic camera moves)
     LaunchedEffect(cameraPositionState.isMoving) {
-        if (!cameraPositionState.isMoving) {
+        if (!cameraPositionState.isMoving && cameraPositionState.cameraMoveStartedReason == CameraMoveStartedReason.GESTURE) {
             val target = cameraPositionState.position.target
-            if (target.latitude != uiState.mapCenterLatitude || target.longitude != uiState.mapCenterLongitude) {
+            if (LocationUtils.computeDistanceKm(target.latitude, target.longitude, uiState.mapCenterLatitude, uiState.mapCenterLongitude) > 0.3) {
                 mapViewModel.onMapPanned(target.latitude, target.longitude)
             }
         }
@@ -143,13 +171,14 @@ fun MapScreen(
                 properties = mapProperties,
                 uiSettings = mapUiSettings
             ) {
-                // Skill Markers
+                // Skill Markers using rememberMarkerState to avoid state recreation on recomposition
                 uiState.nearbySkills.forEach { (skill, distKm) ->
                     val lat = skill.latitude
                     val lng = skill.longitude
                     if (lat != null && lng != null) {
+                        val markerState = rememberMarkerState(key = skill.id, position = LatLng(lat, lng))
                         Marker(
-                            state = MarkerState(position = LatLng(lat, lng)),
+                            state = markerState,
                             title = skill.title,
                             snippet = "${skill.category} · ${LocationUtils.formatDistance(distKm)}",
                             onClick = {
@@ -233,50 +262,12 @@ fun MapScreen(
                 }
             }
 
-            // Floating Action Buttons (My Location & Seed Demo Data)
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Debug Seed Button for Nairobi Demo
-                SmallFloatingActionButton(
-                    onClick = {
-                        mapViewModel.seedDebugNairobiSkills(currentUserId, currentUserName)
-                    },
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Seed Demo Skills")
-                }
-
-                // Recenter My Location FAB
-                FloatingActionButton(
-                    onClick = {
-                        if (uiState.hasLocationPermission) {
-                            mapViewModel.checkPermissionAndFetchLocation()
-                        } else {
-                            permissionLauncher.launch(
-                                arrayOf(
-                                    android.Manifest.permission.ACCESS_FINE_LOCATION,
-                                    android.Manifest.permission.ACCESS_COARSE_LOCATION
-                                )
-                            )
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(Icons.Default.MyLocation, contentDescription = "My Location")
-                }
-            }
-
-            // Location Permission Rationale Banner if denied
+            // Location Permission Rationale Banner at bottom (stacked above FABs/Cards)
             if (!uiState.hasLocationPermission) {
                 Card(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(horizontal = 16.dp, vertical = 90.dp)
+                        .padding(horizontal = 16.dp, vertical = 110.dp)
                         .fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
@@ -314,6 +305,56 @@ fun MapScreen(
                 }
             }
 
+            // Floating Action Buttons (My Location & Seed Debug Skills)
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Debug Seed Button for Nairobi Demo (Gated by BuildConfig.DEBUG)
+                if (BuildConfig.DEBUG) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            mapViewModel.seedDebugNairobiSkills(currentUserId, currentUserName)
+                        },
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Seed Demo Skills")
+                    }
+                }
+
+                // Recenter My Location FAB (Animates camera directly to user position)
+                FloatingActionButton(
+                    onClick = {
+                        if (uiState.hasLocationPermission) {
+                            val lat = uiState.userLatitude
+                            val lng = uiState.userLongitude
+                            if (lat != null && lng != null) {
+                                scope.launch {
+                                    cameraPositionState.animate(
+                                        CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), 14f)
+                                    )
+                                }
+                            } else {
+                                mapViewModel.checkPermissionAndFetchLocation()
+                            }
+                        } else {
+                            permissionLauncher.launch(
+                                arrayOf(
+                                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.MyLocation, contentDescription = "My Location")
+                }
+            }
+
             // Empty state if no skills found nearby
             if (!uiState.isLoading && uiState.nearbySkills.isEmpty()) {
                 Card(
@@ -348,7 +389,7 @@ fun MapScreen(
                 }
             }
 
-            // Bottom Sheet / Floating Card for Selected Skill
+            // Bottom Card for Selected Skill
             uiState.selectedSkill?.let { skill ->
                 val distanceKm = uiState.selectedSkillDistanceKm
                 Card(

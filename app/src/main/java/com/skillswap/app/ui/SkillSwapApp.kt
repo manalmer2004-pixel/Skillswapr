@@ -31,8 +31,19 @@ fun SkillSwapApp(
     val authUiState by authViewModel.uiState.collectAsState()
     val currentUserId = authUiState.userProfile?.id ?: ""
     val startDest = if (authUiState.isAuthenticated) "explore" else "welcome"
-    var currentRoute by remember(startDest) { mutableStateOf(startDest) }
     var selectedListingDetail by remember { mutableStateOf<SkillListing?>(null) }
+
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val tabRoutes = listOf("explore", "browse", "map", "chat", "profile")
+
+    fun goToTab(route: String) {
+        navController.navigate(route) {
+            popUpTo("explore") { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
 
     val scope = rememberCoroutineScope()
     val skillRepository = remember { SkillRepository() }
@@ -58,61 +69,45 @@ fun SkillSwapApp(
 
     Scaffold(
         bottomBar = {
-            if (currentRoute in listOf("explore", "browse", "map", "chat", "profile")) {
+            if (currentRoute in tabRoutes) {
                 NavigationBar {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Explore, contentDescription = "Explore") },
                         label = { Text("Explore") },
                         selected = currentRoute == "explore",
-                        onClick = {
-                            currentRoute = "explore"
-                            navController.navigate("explore") { popUpTo("explore") { inclusive = true } }
-                        }
+                        onClick = { goToTab("explore") }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Layers, contentDescription = "Browse") },
                         label = { Text("Browse") },
                         selected = currentRoute == "browse",
-                        onClick = {
-                            currentRoute = "browse"
-                            navController.navigate("browse") { popUpTo("browse") { inclusive = true } }
-                        }
+                        onClick = { goToTab("browse") }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Map, contentDescription = "Map") },
                         label = { Text("Map") },
                         selected = currentRoute == "map",
-                        onClick = {
-                            currentRoute = "map"
-                            navController.navigate("map") { popUpTo("map") { inclusive = true } }
-                        }
+                        onClick = { goToTab("map") }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat") },
                         label = { Text("Chat") },
                         selected = currentRoute == "chat",
-                        onClick = {
-                            currentRoute = "chat"
-                            navController.navigate("chat") { popUpTo("chat") { inclusive = true } }
-                        }
+                        onClick = { goToTab("chat") }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
                         label = { Text("Profile") },
                         selected = currentRoute == "profile",
-                        onClick = {
-                            currentRoute = "profile"
-                            navController.navigate("profile") { popUpTo("profile") { inclusive = true } }
-                        }
+                        onClick = { goToTab("profile") }
                     )
                 }
             }
         },
         floatingActionButton = {
-            if (currentRoute in listOf("explore", "browse", "map")) {
+            if (currentRoute in listOf("explore", "browse")) {
                 FloatingActionButton(
                     onClick = {
-                        currentRoute = "create_listing"
                         navController.navigate("create_listing")
                     },
                     containerColor = MaterialTheme.colorScheme.primary
@@ -130,11 +125,9 @@ fun SkillSwapApp(
             composable("welcome") {
                 WelcomeScreen(
                     onGetStarted = {
-                        currentRoute = "auth"
                         navController.navigate("auth")
                     },
                     onSignIn = {
-                        currentRoute = "auth"
                         navController.navigate("auth")
                     }
                 )
@@ -142,13 +135,11 @@ fun SkillSwapApp(
             composable("auth") {
                 AuthScreen(
                     onAuthenticated = {
-                        currentRoute = "explore"
                         navController.navigate("explore") {
                             popUpTo("welcome") { inclusive = true }
                         }
                     },
                     onBackToWelcome = {
-                        currentRoute = "welcome"
                         navController.navigate("welcome")
                     },
                     viewModel = authViewModel
@@ -158,17 +149,14 @@ fun SkillSwapApp(
                 ExploreScreen(
                     onSelectSkill = { listing ->
                         selectedListingDetail = listing
-                        currentRoute = "listing_detail"
                         navController.navigate("listing_detail")
                     },
                     onRequestSkill = { listing ->
                         selectedListingDetail = listing
-                        currentRoute = "listing_detail"
                         navController.navigate("listing_detail")
                     },
                     onNavigateToMap = {
-                        currentRoute = "map"
-                        navController.navigate("map")
+                        goToTab("map")
                     },
                     listings = allListings,
                     currentUserId = currentUserId,
@@ -179,12 +167,10 @@ fun SkillSwapApp(
                 BrowseScreen(
                     onSelectSkill = { listing ->
                         selectedListingDetail = listing
-                        currentRoute = "listing_detail"
                         navController.navigate("listing_detail")
                     },
                     onNavigateToMap = {
-                        currentRoute = "map"
-                        navController.navigate("map")
+                        goToTab("map")
                     },
                     listings = allListings,
                     currentUserId = currentUserId,
@@ -195,12 +181,10 @@ fun SkillSwapApp(
                 MapScreen(
                     onSelectSkill = { listing ->
                         selectedListingDetail = listing
-                        currentRoute = "listing_detail"
                         navController.navigate("listing_detail")
                     },
                     onNavigateToList = {
-                        currentRoute = "explore"
-                        navController.navigate("explore") { popUpTo("explore") { inclusive = true } }
+                        goToTab("explore")
                     },
                     authViewModel = authViewModel
                 )
@@ -211,21 +195,17 @@ fun SkillSwapApp(
             composable("profile") {
                 ProfileScreen(
                     onLogout = {
-                        currentRoute = "welcome"
                         navController.navigate("welcome") {
                             popUpTo(0)
                         }
                     },
                     onNavigateToRequests = {
-                        currentRoute = "my_requests"
                         navController.navigate("my_requests")
                     },
                     onNavigateToNotifications = {
-                        currentRoute = "notifications"
                         navController.navigate("notifications")
                     },
                     onNavigateToTransactions = {
-                        currentRoute = "transactions"
                         navController.navigate("transactions")
                     },
                     authViewModel = authViewModel,
@@ -244,8 +224,7 @@ fun SkillSwapApp(
                     authViewModel = authViewModel,
                     reviewViewModel = reviewViewModel,
                     onNavigateToChat = {
-                        currentRoute = "chat"
-                        navController.navigate("chat")
+                        goToTab("chat")
                     }
                 )
             }
@@ -262,7 +241,6 @@ fun SkillSwapApp(
                     currentUserId = currentUserId,
                     currentUserName = currentUserName,
                     onDismiss = {
-                        currentRoute = "explore"
                         navController.popBackStack()
                     },
                     onPublish = { newListing ->
@@ -270,7 +248,6 @@ fun SkillSwapApp(
                         scope.launch {
                             skillRepository.addSkill(newListing)
                         }
-                        currentRoute = "explore"
                         navController.popBackStack()
                     }
                 )
@@ -281,17 +258,14 @@ fun SkillSwapApp(
                     listing = listing,
                     currentUserId = currentUserId,
                     onBack = {
-                        currentRoute = "explore"
                         navController.popBackStack()
                     },
                     onNavigateToRequests = {
-                        currentRoute = "my_requests"
                         navController.navigate("my_requests")
                     },
                     onStartChat = { otherUserId ->
                         chatViewModel.startChatWithUser(currentUserId, otherUserId) {
-                            currentRoute = "chat"
-                            navController.navigate("chat")
+                            goToTab("chat")
                         }
                     },
                     reviewViewModel = reviewViewModel
