@@ -13,6 +13,12 @@ class ChatRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     fun getChatsFlow(userId: String): Flow<List<Chat>> = callbackFlow {
+        if (userId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
         val listener = firestore.collection("chats")
             .whereArrayContains("participantIds", userId)
             .addSnapshotListener { snapshot, error ->
@@ -28,6 +34,12 @@ class ChatRepository(
     }
 
     fun getMessagesFlow(chatId: String): Flow<List<ChatMessage>> = callbackFlow {
+        if (chatId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
         val listener = firestore.collection("chats")
             .document(chatId)
             .collection("messages")
@@ -45,6 +57,7 @@ class ChatRepository(
     }
 
     suspend fun sendMessage(chatId: String, senderId: String, text: String): Boolean {
+        if (chatId.isBlank() || senderId.isBlank() || text.isBlank()) return false
         return try {
             val msgRef = firestore.collection("chats")
                 .document(chatId)
@@ -75,24 +88,31 @@ class ChatRepository(
     }
 
     suspend fun createOrGetChat(participantIds: List<String>): String {
-        val query = firestore.collection("chats")
-            .whereArrayContains("participantIds", participantIds.first())
-            .get()
-            .await()
+        val cleanIds = participantIds.filter { it.isNotBlank() }.distinct()
+        if (cleanIds.size < 2) return ""
 
-        val existingChat = query.documents.mapNotNull { it.toObject(Chat::class.java) }
-            .firstOrNull { it.participantIds.containsAll(participantIds) }
+        return try {
+            val query = firestore.collection("chats")
+                .whereArrayContains("participantIds", cleanIds.first())
+                .get()
+                .await()
 
-        if (existingChat != null) return existingChat.id
+            val existingChat = query.documents.mapNotNull { it.toObject(Chat::class.java) }
+                .firstOrNull { it.participantIds.toSet() == cleanIds.toSet() }
 
-        val newDoc = firestore.collection("chats").document()
-        val newChat = Chat(
-            id = newDoc.id,
-            participantIds = participantIds,
-            lastMessage = "Started a conversation",
-            updatedAt = System.currentTimeMillis()
-        )
-        newDoc.set(newChat).await()
-        return newDoc.id
+            if (existingChat != null) return existingChat.id
+
+            val newDoc = firestore.collection("chats").document()
+            val newChat = Chat(
+                id = newDoc.id,
+                participantIds = cleanIds,
+                lastMessage = "Started a conversation",
+                updatedAt = System.currentTimeMillis()
+            )
+            newDoc.set(newChat).await()
+            newDoc.id
+        } catch (e: Exception) {
+            ""
+        }
     }
 }

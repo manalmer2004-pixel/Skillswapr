@@ -1,5 +1,6 @@
 package com.skillswap.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -45,7 +46,7 @@ fun ChatScreen(
             chatId = activeChatId!!,
             currentUserId = currentUserId,
             chatViewModel = chatViewModel,
-            onBack = { chatViewModel.selectChat("") }
+            onBack = { chatViewModel.selectChat(null) }
         )
     } else {
         Column(
@@ -61,7 +62,18 @@ fun ChatScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (chats.isEmpty()) {
+            if (currentUserId.isBlank()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Please sign in to view your messages",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else if (chats.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -174,6 +186,10 @@ fun ChatDetailView(
     chatViewModel: ChatViewModel,
     onBack: () -> Unit
 ) {
+    BackHandler {
+        onBack()
+    }
+
     val messages by chatViewModel.messages.collectAsState()
     var textInput by remember { mutableStateOf("") }
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }

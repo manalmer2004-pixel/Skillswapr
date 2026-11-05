@@ -32,6 +32,7 @@ class ChatViewModel(
     private var loadMessagesJob: Job? = null
 
     fun loadChats(userId: String) {
+        if (userId.isBlank()) return
         loadChatsJob?.cancel()
         loadChatsJob = viewModelScope.launch {
             repository.getChatsFlow(userId)
@@ -40,11 +41,16 @@ class ChatViewModel(
         }
     }
 
-    fun selectChat(chatId: String) {
+    fun selectChat(chatId: String?) {
         loadMessagesJob?.cancel()
         _messages.value = emptyList()
-        _activeChatId.value = chatId
 
+        if (chatId.isNullOrBlank()) {
+            _activeChatId.value = null
+            return
+        }
+
+        _activeChatId.value = chatId
         loadMessagesJob = viewModelScope.launch {
             repository.getMessagesFlow(chatId)
                 .catch { e -> _errorMessage.value = e.localizedMessage }
@@ -53,17 +59,20 @@ class ChatViewModel(
     }
 
     fun sendMessage(chatId: String, senderId: String, text: String) {
-        if (text.isBlank()) return
+        if (chatId.isBlank() || senderId.isBlank() || text.isBlank()) return
         viewModelScope.launch {
             repository.sendMessage(chatId, senderId, text)
         }
     }
 
     fun startChatWithUser(myUserId: String, otherUserId: String, onChatReady: (String) -> Unit) {
+        if (myUserId.isBlank() || otherUserId.isBlank() || myUserId == otherUserId) return
         viewModelScope.launch {
             val chatId = repository.createOrGetChat(listOf(myUserId, otherUserId))
-            selectChat(chatId)
-            onChatReady(chatId)
+            if (chatId.isNotBlank()) {
+                selectChat(chatId)
+                onChatReady(chatId)
+            }
         }
     }
 
