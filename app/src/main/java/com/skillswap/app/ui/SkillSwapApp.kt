@@ -6,6 +6,7 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -57,7 +58,7 @@ fun SkillSwapApp(
 
     Scaffold(
         bottomBar = {
-            if (currentRoute in listOf("explore", "browse", "chat", "profile")) {
+            if (currentRoute in listOf("explore", "browse", "map", "chat", "profile")) {
                 NavigationBar {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Explore, contentDescription = "Explore") },
@@ -75,6 +76,15 @@ fun SkillSwapApp(
                         onClick = {
                             currentRoute = "browse"
                             navController.navigate("browse") { popUpTo("browse") { inclusive = true } }
+                        }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Map, contentDescription = "Map") },
+                        label = { Text("Map") },
+                        selected = currentRoute == "map",
+                        onClick = {
+                            currentRoute = "map"
+                            navController.navigate("map") { popUpTo("map") { inclusive = true } }
                         }
                     )
                     NavigationBarItem(
@@ -99,7 +109,7 @@ fun SkillSwapApp(
             }
         },
         floatingActionButton = {
-            if (currentRoute in listOf("explore", "browse")) {
+            if (currentRoute in listOf("explore", "browse", "map")) {
                 FloatingActionButton(
                     onClick = {
                         currentRoute = "create_listing"
@@ -156,6 +166,10 @@ fun SkillSwapApp(
                         currentRoute = "listing_detail"
                         navController.navigate("listing_detail")
                     },
+                    onNavigateToMap = {
+                        currentRoute = "map"
+                        navController.navigate("map")
+                    },
                     listings = allListings,
                     currentUserId = currentUserId,
                     ratingSummaries = ratingSummaries
@@ -168,9 +182,27 @@ fun SkillSwapApp(
                         currentRoute = "listing_detail"
                         navController.navigate("listing_detail")
                     },
+                    onNavigateToMap = {
+                        currentRoute = "map"
+                        navController.navigate("map")
+                    },
                     listings = allListings,
                     currentUserId = currentUserId,
                     ratingSummaries = ratingSummaries
+                )
+            }
+            composable("map") {
+                MapScreen(
+                    onSelectSkill = { listing ->
+                        selectedListingDetail = listing
+                        currentRoute = "listing_detail"
+                        navController.navigate("listing_detail")
+                    },
+                    onNavigateToList = {
+                        currentRoute = "explore"
+                        navController.navigate("explore") { popUpTo("explore") { inclusive = true } }
+                    },
+                    authViewModel = authViewModel
                 )
             }
             composable("chat") {

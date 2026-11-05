@@ -6,9 +6,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -20,6 +22,7 @@ import com.skillswap.app.ui.viewmodel.FavoriteViewModel
 @Composable
 fun BrowseScreen(
     onSelectSkill: (SkillListing) -> Unit = {},
+    onNavigateToMap: () -> Unit = {},
     listings: List<SkillListing> = emptyList(),
     currentUserId: String = "",
     ratingSummaries: Map<String, Pair<Double, Long>> = emptyMap(),
@@ -65,11 +68,20 @@ fun BrowseScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Text(
-            text = "Browse Community Skills",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Browse Community Skills",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = onNavigateToMap) {
+                Icon(Icons.Default.Map, contentDescription = "View Map")
+            }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 

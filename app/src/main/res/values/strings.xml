@@ -1,4 +1,19 @@
 <resources>
     <string name="app_name">SkillSwap</string>
     <string name="time_bank_tagline">Trade Time, Not Money</string>
+    <string name="map_title">Skills Map</string>
+    <string name="location_permission_title">Location Permission Needed</string>
+    <string name="location_permission_rationale">SkillSwap uses your location to show skills offered near you. Your exact address is never stored or shared.</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="open_settings">Open App Settings</string>
+    <string name="search_this_area">Search this area</string>
+    <string name="no_skills_nearby">No skills found in this area. Try increasing the search radius or exploring another location.</string>
+    <string name="view_skill">View Skill</string>
+    <string name="request_swap">Request Swap</string>
+    <string name="delivery_mode_in_person">In Person</string>
+    <string name="delivery_mode_online">Online</string>
+    <string name="delivery_mode_both">Both</string>
+    <string name="privacy_notice">For safety and privacy, skill locations are approximate (~100m) or set at public meeting spots.</string>
+    <string name="use_current_location">Use My Current Location</string>
+    <string name="open_in_google_maps">Open in Google Maps</string>
 </resources>

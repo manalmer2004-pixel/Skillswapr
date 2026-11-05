@@ -12,20 +12,34 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.skillswap.app.R
+import com.skillswap.app.data.model.DeliveryMode
 import com.skillswap.app.data.model.SkillListing
+import com.skillswap.app.data.repository.LocationRepository
 import com.skillswap.app.data.repository.StorageRepository
 import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.CategoryViewModel
+import com.skillswap.app.util.LocationUtils
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,6 +52,7 @@ fun CreateListingScreen(
     authViewModel: AuthViewModel = viewModel(),
     categoryViewModel: CategoryViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     val authUiState by authViewModel.uiState.collectAsState()
     val userProfile = authUiState.userProfile
 
@@ -55,16 +70,44 @@ fun CreateListingScreen(
     var estimatedHours by remember { mutableDoubleStateOf(2.0) }
     var toolsProvidedInput by remember { mutableStateOf("") }
 
+    // Geolocation / Location fields
+    var deliveryMode by remember { mutableStateOf(DeliveryMode.IN_PERSON.name) }
+    var locationLabel by remember { mutableStateOf(userProfile?.location ?: "Westlands, Nairobi") }
+    var selectedLat by remember { mutableStateOf<Double?>(-1.286389) } // Default Nairobi CBD
+    var selectedLng by remember { mutableStateOf<Double?>(36.817223) }
+
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isPublishing by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
     val storageRepository = remember { StorageRepository() }
+    val locationRepository = remember { LocationRepository(context) }
+
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(
+            LatLng(selectedLat ?: -1.286389, selectedLng ?: 36.817223),
+            13f
+        )
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         selectedImageUri = uri
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.any { it }) {
+            scope.launch {
+                val loc = locationRepository.getCurrentLocation()
+                if (loc != null) {
+                    selectedLat = LocationUtils.roundCoordinate(loc.latitude)
+                    selectedLng = LocationUtils.roundCoordinate(loc.longitude)
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -140,6 +183,121 @@ fun CreateListingScreen(
                         onClick = { selectedCategory = cat },
                         text = { Text(cat) }
                     )
+                }
+            }
+
+            // Delivery Mode Selector
+            Text("Delivery Mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                DeliveryMode.entries.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = deliveryMode == mode.name,
+                        onClick = { deliveryMode = mode.name },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = 3)
+                    ) {
+                        Text(
+                            when (mode) {
+                                DeliveryMode.IN_PERSON -> "In Person"
+                                DeliveryMode.ONLINE -> "Online"
+                                DeliveryMode.BOTH -> "Both"
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Location Step if In Person or Both
+            if (deliveryMode != DeliveryMode.ONLINE.name) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Skill Location & Public Spot",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        OutlinedTextField(
+                            value = locationLabel,
+                            onValueChange = { locationLabel = it },
+                            label = { Text("Location Name / Area") },
+                            placeholder = { Text("e.g. Westlands Library, Yaya Center Cafe") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                if (locationRepository.hasLocationPermission()) {
+                                    scope.launch {
+                                        val loc = locationRepository.getCurrentLocation()
+                                        if (loc != null) {
+                                            selectedLat = LocationUtils.roundCoordinate(loc.latitude)
+                                            selectedLng = LocationUtils.roundCoordinate(loc.longitude)
+                                        }
+                                    }
+                                } else {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                            android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.use_current_location))
+                        }
+
+                        // Mini Interactive Map preview to drop pin
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                        ) {
+                            GoogleMap(
+                                modifier = Modifier.fillMaxSize(),
+                                cameraPositionState = cameraPositionState,
+                                onMapClick = { latLng ->
+                                    selectedLat = LocationUtils.roundCoordinate(latLng.latitude)
+                                    selectedLng = LocationUtils.roundCoordinate(latLng.longitude)
+                                }
+                            ) {
+                                if (selectedLat != null && selectedLng != null) {
+                                    Marker(
+                                        state = MarkerState(position = LatLng(selectedLat!!, selectedLng!!)),
+                                        title = "Skill Location"
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.LocationOn,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(R.string.privacy_notice),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
 
@@ -249,6 +407,10 @@ fun CreateListingScreen(
                                 imageUrl = storageRepository.uploadSkillImage(uri, listingId) ?: uri.toString()
                             }
 
+                            val computedHash = if (selectedLat != null && selectedLng != null && deliveryMode != DeliveryMode.ONLINE.name) {
+                                LocationUtils.computeGeoHash(selectedLat!!, selectedLng!!)
+                            } else ""
+
                             val newListing = SkillListing(
                                 id = listingId,
                                 userId = currentUserId,
@@ -261,7 +423,12 @@ fun CreateListingScreen(
                                 creditCost = estimatedHours,
                                 toolsProvided = toolsProvidedInput.split(",").map { it.trim() }.filter { it.isNotBlank() },
                                 teacherName = currentUserName,
-                                locationArea = userProfile?.location ?: "",
+                                locationArea = locationLabel.ifBlank { userProfile?.location ?: "" },
+                                locationLabel = locationLabel,
+                                latitude = if (deliveryMode != DeliveryMode.ONLINE.name) selectedLat else null,
+                                longitude = if (deliveryMode != DeliveryMode.ONLINE.name) selectedLng else null,
+                                geohash = computedHash,
+                                deliveryMode = deliveryMode,
                                 createdAt = System.currentTimeMillis()
                             )
                             isPublishing = false

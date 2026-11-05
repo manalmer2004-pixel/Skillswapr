@@ -2,7 +2,10 @@ package com.skillswap.app.data.model
 
 import androidx.annotation.DrawableRes
 import androidx.room.Entity
+import androidx.room.Ignore
 import androidx.room.PrimaryKey
+import com.google.firebase.firestore.Exclude
+import com.google.firebase.firestore.GeoPoint
 
 @Entity(tableName = "skills")
 data class SkillListing(
@@ -23,5 +26,24 @@ data class SkillListing(
     val createdAt: Long = System.currentTimeMillis(),
     val teacherName: String = "",
     val teacherAvatar: String = "",
-    val saved: Boolean = false
-)
+    val saved: Boolean = false,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val geohash: String = "",
+    val locationLabel: String = "",
+    val deliveryMode: String = DeliveryMode.IN_PERSON.name
+) {
+    @get:Exclude
+    @get:Ignore
+    val location: GeoPoint?
+        get() = if (latitude != null && longitude != null) GeoPoint(latitude, longitude) else null
+
+    @get:Exclude
+    @get:Ignore
+    val deliveryModeEnum: DeliveryMode
+        get() = try {
+            DeliveryMode.valueOf(deliveryMode)
+        } catch (_: Exception) {
+            DeliveryMode.IN_PERSON
+        }
+}

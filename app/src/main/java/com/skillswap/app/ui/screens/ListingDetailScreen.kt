@@ -1,5 +1,7 @@
 package com.skillswap.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,11 +23,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.skillswap.app.R
 import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.data.model.SwapRequest
 import com.skillswap.app.data.model.UserAvailability
@@ -47,6 +58,7 @@ fun ListingDetailScreen(
     availabilityViewModel: AvailabilityViewModel = viewModel(),
     reviewViewModel: ReviewViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     val isOwner = currentUserId.isNotBlank() && currentUserId == listing.userId
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -396,6 +408,87 @@ fun ListingDetailScreen(
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // Location & Map Preview Section
+            if (listing.latitude != null && listing.longitude != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Skill Location & Area",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        val label = listing.locationLabel.ifBlank { listing.locationArea }
+                        if (label.isNotBlank()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        val lat = listing.latitude!!
+                        val lng = listing.longitude!!
+                        val previewCameraState = rememberCameraPositionState {
+                            position = CameraPosition.fromLatLngZoom(LatLng(lat, lng), 14f)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                        ) {
+                            GoogleMap(
+                                modifier = Modifier.fillMaxSize(),
+                                cameraPositionState = previewCameraState
+                            ) {
+                                Marker(
+                                    state = MarkerState(position = LatLng(lat, lng)),
+                                    title = listing.title,
+                                    snippet = label
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = stringResource(R.string.privacy_notice),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                val uri = Uri.parse("geo:$lat,$lng?q=$lat,$lng(${Uri.encode(listing.title)})")
+                                val intent = Intent(Intent.ACTION_VIEW, uri)
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(R.string.open_in_google_maps))
                         }
                     }
                 }

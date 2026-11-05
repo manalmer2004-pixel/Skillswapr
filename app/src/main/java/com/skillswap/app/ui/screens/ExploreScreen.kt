@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
@@ -35,6 +37,7 @@ import java.util.Locale
 fun ExploreScreen(
     onSelectSkill: (SkillListing) -> Unit,
     onRequestSkill: (SkillListing) -> Unit,
+    onNavigateToMap: () -> Unit = {},
     listings: List<SkillListing> = emptyList(),
     currentUserId: String = "",
     ratingSummaries: Map<String, Pair<Double, Long>> = emptyMap(),
@@ -91,6 +94,11 @@ fun ExploreScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToMap) {
+                        Icon(Icons.Default.Map, contentDescription = "View Map")
                     }
                 }
             )
@@ -250,6 +258,25 @@ fun SkillListingCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2
             )
+
+            val locationText = listing.locationLabel.ifBlank { listing.locationArea }
+            if (locationText.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.LocationOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = locationText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 

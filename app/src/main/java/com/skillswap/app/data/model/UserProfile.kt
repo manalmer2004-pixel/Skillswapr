@@ -25,5 +25,7 @@ data class UserProfile(
     val badges: List<String> = emptyList(),
     @get:PropertyName("isVerified") val isVerified: Boolean = false,
     @get:PropertyName("isAdmin") val isAdmin: Boolean = false,
-    val lastSwapId: String = ""
+    val lastSwapId: String = "",
+    val lastKnownAreaLat: Double? = null,
+    val lastKnownAreaLng: Double? = null
 )
