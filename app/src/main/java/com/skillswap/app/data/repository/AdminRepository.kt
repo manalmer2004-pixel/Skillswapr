@@ -197,4 +197,157 @@ class AdminRepository(
             Result.failure(e)
         }
     }
+
+    // --- PHASE 3 METHODS ---
+
+    suspend fun updateSkillHidden(skillId: String, isHidden: Boolean): Result<Unit> {
+        return try {
+            firestore.collection("skills").document(skillId)
+                .update("isHidden", isHidden).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteSkill(skillId: String): Result<Unit> {
+        return try {
+            firestore.collection("skills").document(skillId).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteReview(reviewId: String): Result<Unit> {
+        return try {
+            firestore.collection("reviews").document(reviewId).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addCategory(name: String, order: Int): Result<Unit> {
+        if (name.isBlank()) return Result.failure(Exception("Category name cannot be empty"))
+        return try {
+            val docRef = firestore.collection("categories").document()
+            val category = Category(id = docRef.id, name = name.trim(), icon = "", order = order)
+            docRef.set(category).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateCategory(categoryId: String, newName: String, newOrder: Int): Result<Unit> {
+        if (newName.isBlank()) return Result.failure(Exception("Category name cannot be empty"))
+        return try {
+            firestore.collection("categories").document(categoryId)
+                .update(mapOf("name" to newName.trim(), "order" to newOrder)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteCategory(categoryId: String, categoryName: String): Result<Unit> {
+        return try {
+            // Check if any skill uses this category name
+            val skillsWithCategory = firestore.collection("skills")
+                .whereEqualTo("category", categoryName)
+                .limit(1)
+                .get()
+                .await()
+
+            if (!skillsWithCategory.isEmpty) {
+                return Result.failure(Exception("Cannot delete category: Skills are currently listed under '$categoryName'"))
+            }
+
+            firestore.collection("categories").document(categoryId).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun forceCancelSwapRequest(requestId: String, adminId: String, reason: String): Result<Unit> {
+        if (reason.isBlank()) return Result.failure(Exception("Reason is required to force cancel a swap request"))
+        return try {
+            val reqSnap = firestore.collection("swapRequests").document(requestId).get().await()
+            val request = reqSnap.toObject(SwapRequest::class.java)
+                ?: return Result.failure(Exception("Swap request not found"))
+
+            if (request.status != SwapRequestStatus.PENDING && request.status != SwapRequestStatus.ACCEPTED) {
+                return Result.failure(Exception("Only PENDING or ACCEPTED swap requests can be cancelled"))
+            }
+
+            firestore.collection("swapRequests").document(requestId)
+                .update("status", SwapRequestStatus.CANCELLED.name).await()
+
+            // Notify requester
+            if (request.requesterId.isNotBlank() && request.requesterId != adminId) {
+                val notif1 = NotificationItem(
+                    id = firestore.collection("notifications").document().id,
+                    userId = request.requesterId,
+                    type = NotificationType.ADMIN_ACTION,
+                    refId = requestId,
+                    message = "Swap request for '${request.skillTitle}' was cancelled by an admin. Reason: $reason",
+                    createdAt = System.currentTimeMillis()
+                )
+                firestore.collection("notifications").add(notif1).await()
+            }
+
+            // Notify provider
+            if (request.providerId.isNotBlank() && request.providerId != adminId && request.providerId != request.requesterId) {
+                val notif2 = NotificationItem(
+                    id = firestore.collection("notifications").document().id,
+                    userId = request.providerId,
+                    type = NotificationType.ADMIN_ACTION,
+                    refId = requestId,
+                    message = "Swap request for '${request.skillTitle}' was cancelled by an admin. Reason: $reason",
+                    createdAt = System.currentTimeMillis()
+                )
+                firestore.collection("notifications").add(notif2).await()
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun broadcastAnnouncement(adminId: String, title: String, message: String): Result<Int> {
+        if (title.isBlank() || message.isBlank()) return Result.failure(Exception("Title and message are required for broadcast"))
+        return try {
+            val users = getAllUsers().filter { it.id != adminId && it.id.isNotBlank() }
+            if (users.isEmpty()) return Result.success(0)
+
+            val fullText = "📢 $title: $message"
+            val chunks = users.chunked(450) // Firestore batch limit is 500
+            var count = 0
+
+            for (chunk in chunks) {
+                val batch = firestore.batch()
+                for (user in chunk) {
+                    val docRef = firestore.collection("notifications").document()
+                    val notif = NotificationItem(
+                        id = docRef.id,
+                        userId = user.id,
+                        type = NotificationType.ADMIN_ANNOUNCEMENT,
+                        refId = "broadcast_${System.currentTimeMillis()}",
+                        message = fullText,
+                        createdAt = System.currentTimeMillis()
+                    )
+                    batch.set(docRef, notif)
+                    count++
+                }
+                batch.commit().await()
+            }
+
+            Result.success(count)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
