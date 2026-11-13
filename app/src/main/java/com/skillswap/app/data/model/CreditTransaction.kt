@@ -1,19 +1,24 @@
 package com.skillswap.app.data.model
 
-import com.google.firebase.firestore.DocumentId
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 
 enum class TransactionType {
     EARNED,
     SPENT,
-    BONUS
+    BONUS,
+    ADMIN_ADJUSTMENT
 }
 
+@Entity(tableName = "credit_transactions")
 data class CreditTransaction(
-    @DocumentId val id: String = "",
+    @PrimaryKey val id: String = "",
     val userId: String = "",
     val sessionId: String = "",
     val type: TransactionType = TransactionType.BONUS,
     val amount: Double = 0.0,
     val balanceAfter: Double = 0.0,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val reason: String = "",
+    val adminId: String = ""
 )

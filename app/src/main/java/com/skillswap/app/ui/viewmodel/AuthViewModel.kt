@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 
 data class AuthUiState(
     val isLoading: Boolean = false,
+    val isLoadingProfile: Boolean = false,
     val errorMessage: String? = null,
     val userProfile: UserProfile? = null,
     val isAuthenticated: Boolean = false,
@@ -24,7 +25,12 @@ class AuthViewModel(
     private val userRepository: UserRepository = UserRepository()
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AuthUiState(isAuthenticated = authRepository.isUserLoggedIn))
+    private val _uiState = MutableStateFlow(
+        AuthUiState(
+            isAuthenticated = authRepository.isUserLoggedIn,
+            isLoadingProfile = authRepository.isUserLoggedIn
+        )
+    )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     init {
@@ -45,6 +51,7 @@ class AuthViewModel(
                 is AuthResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isLoadingProfile = false,
                         userProfile = result.data,
                         isAuthenticated = true,
                         errorMessage = null
@@ -73,6 +80,7 @@ class AuthViewModel(
                 is AuthResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isLoadingProfile = false,
                         userProfile = result.data,
                         isAuthenticated = true,
                         isAdmin = result.data.isAdmin,
@@ -102,6 +110,7 @@ class AuthViewModel(
                 is AuthResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isLoadingProfile = false,
                         userProfile = result.data,
                         isAuthenticated = true,
                         isAdmin = true,
@@ -120,13 +129,26 @@ class AuthViewModel(
     }
 
     fun loadUserProfile() {
-        val uid = authRepository.currentUser?.uid ?: return
+        val uid = authRepository.currentUser?.uid ?: run {
+            _uiState.value = _uiState.value.copy(isLoadingProfile = false)
+            return
+        }
         viewModelScope.launch {
             val profile = userRepository.getUserProfile(uid)
-            _uiState.value = _uiState.value.copy(
-                userProfile = profile,
-                isAdmin = profile?.isAdmin ?: false
-            )
+            if (profile?.isSuspended == true) {
+                authRepository.signOut()
+                _uiState.value = AuthUiState(
+                    isAuthenticated = false,
+                    isLoadingProfile = false,
+                    errorMessage = "Your account has been suspended."
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    userProfile = profile,
+                    isAdmin = profile?.isAdmin ?: false,
+                    isLoadingProfile = false
+                )
+            }
         }
     }
 
@@ -143,7 +165,7 @@ class AuthViewModel(
 
     fun signOut(onLoggedOut: () -> Unit) {
         authRepository.signOut()
-        _uiState.value = AuthUiState(isAuthenticated = false)
+        _uiState.value = AuthUiState(isAuthenticated = false, isLoadingProfile = false)
         onLoggedOut()
     }
 

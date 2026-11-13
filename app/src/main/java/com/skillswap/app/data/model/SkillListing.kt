@@ -6,6 +6,7 @@ import androidx.room.Ignore
 import androidx.room.PrimaryKey
 import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.GeoPoint
+import com.google.firebase.firestore.PropertyName
 
 @Entity(tableName = "skills")
 data class SkillListing(
@@ -31,7 +32,8 @@ data class SkillListing(
     val longitude: Double? = null,
     val geohash: String = "",
     val locationLabel: String = "",
-    val deliveryMode: String = DeliveryMode.IN_PERSON.name
+    val deliveryMode: String = DeliveryMode.IN_PERSON.name,
+    @get:PropertyName("isHidden") val isHidden: Boolean = false
 ) {
     @get:Exclude
     @get:Ignore

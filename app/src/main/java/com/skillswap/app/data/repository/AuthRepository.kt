@@ -42,7 +42,8 @@ class AuthRepository(
                 email = email,
                 timeCreditBalance = initialCredits,
                 totalHoursEarned = 0.0,
-                joinedDate = joinedDateStr
+                joinedDate = joinedDateStr,
+                createdAt = System.currentTimeMillis()
             )
 
             val txDocId = "bonus_${user.uid}"
@@ -88,6 +89,11 @@ class AuthRepository(
                 profile = profile.copy(isAdmin = true)
             }
 
+            if (profile.isSuspended) {
+                auth.signOut()
+                return AuthResult.Error("Your account has been suspended.")
+            }
+
             AuthResult.Success(profile)
         } catch (e: Exception) {
             AuthResult.Error(e.localizedMessage ?: "Sign in failed")
@@ -105,6 +111,12 @@ class AuthRepository(
                 .await()
 
             val initialProfile = docSnapshot.toObject(UserProfile::class.java)
+
+            if (initialProfile?.isSuspended == true) {
+                auth.signOut()
+                return AuthResult.Error("Your account has been suspended.")
+            }
+
             val isAdmin = checkIsAdmin(docSnapshot, initialProfile)
 
             if (!isAdmin) {

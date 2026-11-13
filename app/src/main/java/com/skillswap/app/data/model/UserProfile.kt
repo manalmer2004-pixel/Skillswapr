@@ -27,5 +27,7 @@ data class UserProfile(
     @get:PropertyName("isAdmin") val isAdmin: Boolean = false,
     val lastSwapId: String = "",
     val lastKnownAreaLat: Double? = null,
-    val lastKnownAreaLng: Double? = null
+    val lastKnownAreaLng: Double? = null,
+    @get:PropertyName("isSuspended") val isSuspended: Boolean = false,
+    val createdAt: Long = 0L
 )

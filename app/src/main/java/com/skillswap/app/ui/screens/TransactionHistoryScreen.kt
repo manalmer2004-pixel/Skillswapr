@@ -93,16 +93,24 @@ fun TransactionCard(tx: CreditTransaction) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = when (tx.type) {
                         TransactionType.EARNED -> "Time Credits Earned"
                         TransactionType.SPENT -> "Time Credits Spent"
                         TransactionType.BONUS -> "Welcome Bonus Credits"
+                        TransactionType.ADMIN_ADJUSTMENT -> "Admin Adjustment"
                     },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                if (tx.type == TransactionType.ADMIN_ADJUSTMENT && tx.reason.isNotBlank()) {
+                    Text(
+                        text = "Reason: ${tx.reason}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Text(
                     text = dateFormat.format(Date(tx.createdAt)),
                     style = MaterialTheme.typography.labelSmall,
@@ -115,16 +123,20 @@ fun TransactionCard(tx: CreditTransaction) {
                 )
             }
 
+            Spacer(modifier = Modifier.width(8.dp))
+
             Text(
                 text = when (tx.type) {
                     TransactionType.EARNED, TransactionType.BONUS -> "+${tx.amount} hrs"
                     TransactionType.SPENT -> "-${tx.amount} hrs"
+                    TransactionType.ADMIN_ADJUSTMENT -> if (tx.amount >= 0) "+${tx.amount} hrs" else "${tx.amount} hrs"
                 },
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = when (tx.type) {
                     TransactionType.EARNED, TransactionType.BONUS -> MaterialTheme.colorScheme.primary
                     TransactionType.SPENT -> MaterialTheme.colorScheme.error
+                    TransactionType.ADMIN_ADJUSTMENT -> if (tx.amount >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 }
             )
         }

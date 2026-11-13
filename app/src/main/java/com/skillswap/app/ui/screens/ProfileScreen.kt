@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
@@ -31,6 +32,7 @@ fun ProfileScreen(
     onNavigateToRequests: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToTransactions: () -> Unit = {},
+    onSwitchToAdminView: () -> Unit = {},
     authViewModel: AuthViewModel = viewModel(),
     notifViewModel: NotificationViewModel = viewModel(),
     reviewViewModel: ReviewViewModel = viewModel(),
@@ -303,7 +305,7 @@ fun ProfileScreen(
             }
         }
 
-        // Quick Navigation Section (My Requests, Notifications, Credit History)
+        // Quick Navigation Section (My Requests, Notifications, Credit History, Admin Dashboard)
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
@@ -311,6 +313,27 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+
+                if (uiState.isAdmin || firestoreProfile?.isAdmin == true) {
+                    Card(
+                        onClick = onSwitchToAdminView,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(14.dp)
+                                .fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                            Text("Admin Dashboard", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                            Text("→", color = MaterialTheme.colorScheme.onTertiaryContainer)
+                        }
+                    }
+                }
 
                 OutlinedCard(
                     onClick = onNavigateToRequests,

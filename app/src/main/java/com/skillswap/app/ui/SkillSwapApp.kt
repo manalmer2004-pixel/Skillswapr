@@ -1,5 +1,7 @@
 package com.skillswap.app.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -10,6 +12,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.*
@@ -17,6 +20,7 @@ import com.skillswap.app.data.model.SkillListing
 import com.skillswap.app.data.repository.CategoryRepository
 import com.skillswap.app.data.repository.SkillRepository
 import com.skillswap.app.ui.screens.*
+import com.skillswap.app.ui.screens.admin.AdminApp
 import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.ChatViewModel
 import com.skillswap.app.ui.viewmodel.ReviewViewModel
@@ -27,8 +31,23 @@ fun SkillSwapApp(
     authViewModel: AuthViewModel = viewModel(),
     reviewViewModel: ReviewViewModel = viewModel()
 ) {
-    val navController = rememberNavController()
     val authUiState by authViewModel.uiState.collectAsState()
+
+    // On cold start, show loading state while user profile is being fetched so admins are never flashed user UI
+    if (authUiState.isAuthenticated && authUiState.isLoadingProfile) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    val isAdmin = authUiState.userProfile?.isAdmin == true
+    var isAdminMode by remember(isAdmin) { mutableStateOf(isAdmin) }
+
+    val navController = rememberNavController()
     val currentUserId = authUiState.userProfile?.id ?: ""
     val startDest = if (authUiState.isAuthenticated) "explore" else "welcome"
     var selectedListingDetail by remember { mutableStateOf<SkillListing?>(null) }
@@ -52,7 +71,6 @@ fun SkillSwapApp(
 
     val ratingSummaries by reviewViewModel.ratingSummaries.collectAsState()
 
-    val isAdmin = authUiState.userProfile?.isAdmin == true
     LaunchedEffect(isAdmin) {
         if (isAdmin) CategoryRepository().seedIfEmpty()
     }
@@ -65,6 +83,21 @@ fun SkillSwapApp(
 
     LaunchedEffect(allListings.size) {
         reviewViewModel.loadRatingSummaries(allListings.map { it.userId }.distinct())
+    }
+
+    // Render AdminApp if user is an admin and admin mode is active
+    if (authUiState.isAuthenticated && isAdmin && isAdminMode) {
+        AdminApp(
+            onSwitchToUserView = { isAdminMode = false },
+            onLogout = {
+                authViewModel.signOut {
+                    navController.navigate("welcome") {
+                        popUpTo(0)
+                    }
+                }
+            }
+        )
+        return
     }
 
     Scaffold(
@@ -207,6 +240,9 @@ fun SkillSwapApp(
                     },
                     onNavigateToTransactions = {
                         navController.navigate("transactions")
+                    },
+                    onSwitchToAdminView = {
+                        isAdminMode = true
                     },
                     authViewModel = authViewModel,
                     reviewViewModel = reviewViewModel,

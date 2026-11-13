@@ -20,7 +20,7 @@ class SkillRepository(
                 } catch (e: Exception) {
                     null
                 }
-            }
+            }.filter { !it.isHidden }
         } catch (e: Exception) {
             emptyList()
         }
@@ -101,7 +101,7 @@ class SkillRepository(
         val seenIds = mutableSetOf<String>()
 
         for (skill in fetchedDocs) {
-            if (skill.id.isBlank() || !seenIds.add(skill.id)) continue
+            if (skill.id.isBlank() || skill.isHidden || !seenIds.add(skill.id)) continue
 
             // Filter out delivery mode mismatch
             if (deliveryModeFilter == "IN_PERSON" && skill.deliveryMode == DeliveryMode.ONLINE.name) continue
