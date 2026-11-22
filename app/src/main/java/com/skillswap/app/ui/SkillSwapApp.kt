@@ -261,14 +261,27 @@ fun SkillSwapApp(
                     reviewViewModel = reviewViewModel,
                     onNavigateToChat = {
                         goToTab("chat")
+                    },
+                    onBack = {
+                        navController.popBackStack()
                     }
                 )
             }
             composable("notifications") {
-                NotificationsScreen(authViewModel = authViewModel)
+                NotificationsScreen(
+                    authViewModel = authViewModel,
+                    onBack = {
+                        navController.popBackStack()
+                    }
+                )
             }
             composable("transactions") {
-                TransactionHistoryScreen(authViewModel = authViewModel)
+                TransactionHistoryScreen(
+                    authViewModel = authViewModel,
+                    onBack = {
+                        navController.popBackStack()
+                    }
+                )
             }
             composable("create_listing") {
                 val currentUserName = authUiState.userProfile?.name ?: ""

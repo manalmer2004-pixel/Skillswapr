@@ -171,21 +171,23 @@ fun MapScreen(
                 properties = mapProperties,
                 uiSettings = mapUiSettings
             ) {
-                // Skill Markers using rememberMarkerState to avoid state recreation on recomposition
+                // Skill Markers wrapped in key(skill.id) to prevent marker state mismatch
                 uiState.nearbySkills.forEach { (skill, distKm) ->
                     val lat = skill.latitude
                     val lng = skill.longitude
                     if (lat != null && lng != null) {
-                        val markerState = rememberMarkerState(key = skill.id, position = LatLng(lat, lng))
-                        Marker(
-                            state = markerState,
-                            title = skill.title,
-                            snippet = "${skill.category} · ${LocationUtils.formatDistance(distKm)}",
-                            onClick = {
-                                mapViewModel.selectSkill(skill, distKm)
-                                true
-                            }
-                        )
+                        key(skill.id) {
+                            val markerState = rememberMarkerState(key = skill.id, position = LatLng(lat, lng))
+                            Marker(
+                                state = markerState,
+                                title = skill.title,
+                                snippet = "${skill.category} · ${LocationUtils.formatDistance(distKm)}",
+                                onClick = {
+                                    mapViewModel.selectSkill(skill, distKm)
+                                    true
+                                }
+                            )
+                        }
                     }
                 }
             }

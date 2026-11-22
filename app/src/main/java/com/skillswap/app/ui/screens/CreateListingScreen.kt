@@ -26,12 +26,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.rememberMarkerState
 import com.skillswap.app.R
 import com.skillswap.app.data.model.DeliveryMode
 import com.skillswap.app.data.model.SkillListing
@@ -72,7 +73,8 @@ fun CreateListingScreen(
 
     // Geolocation / Location fields
     var deliveryMode by remember { mutableStateOf(DeliveryMode.IN_PERSON.name) }
-    var locationLabel by remember { mutableStateOf(userProfile?.location ?: "Westlands, Nairobi") }
+    var locationLabel by remember { mutableStateOf("") }
+    var labelEditedByUser by remember { mutableStateOf(false) }
     var selectedLat by remember { mutableStateOf<Double?>(-1.286389) } // Default Nairobi CBD
     var selectedLng by remember { mutableStateOf<Double?>(36.817223) }
 
@@ -90,6 +92,48 @@ fun CreateListingScreen(
         )
     }
 
+    val markerState = rememberMarkerState()
+
+    LaunchedEffect(selectedLat, selectedLng) {
+        if (selectedLat != null && selectedLng != null) {
+            markerState.position = LatLng(selectedLat!!, selectedLng!!)
+        }
+    }
+
+    fun setPin(lat: Double, lng: Double, recenter: Boolean) {
+        val roundedLat = LocationUtils.roundCoordinate(lat)
+        val roundedLng = LocationUtils.roundCoordinate(lng)
+        selectedLat = roundedLat
+        selectedLng = roundedLng
+
+        if (recenter) {
+            scope.launch {
+                cameraPositionState.animate(
+                    CameraUpdateFactory.newLatLngZoom(LatLng(roundedLat, roundedLng), 14f)
+                )
+            }
+        }
+
+        if (!labelEditedByUser) {
+            scope.launch {
+                val placeName = locationRepository.reverseGeocode(roundedLat, roundedLng)
+                if (!placeName.isNullOrBlank() && !labelEditedByUser) {
+                    locationLabel = placeName
+                }
+            }
+        }
+    }
+
+    // Automatically initialize location if permission is already granted
+    LaunchedEffect(Unit) {
+        if (locationRepository.hasLocationPermission()) {
+            val loc = locationRepository.getCurrentLocation()
+            if (loc != null) {
+                setPin(loc.latitude, loc.longitude, recenter = true)
+            }
+        }
+    }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -103,8 +147,7 @@ fun CreateListingScreen(
             scope.launch {
                 val loc = locationRepository.getCurrentLocation()
                 if (loc != null) {
-                    selectedLat = LocationUtils.roundCoordinate(loc.latitude)
-                    selectedLng = LocationUtils.roundCoordinate(loc.longitude)
+                    setPin(loc.latitude, loc.longitude, recenter = true)
                 }
             }
         }
@@ -225,7 +268,10 @@ fun CreateListingScreen(
 
                         OutlinedTextField(
                             value = locationLabel,
-                            onValueChange = { locationLabel = it },
+                            onValueChange = {
+                                locationLabel = it
+                                labelEditedByUser = it.isNotBlank()
+                            },
                             label = { Text("Location Name / Area") },
                             placeholder = { Text("e.g. Westlands Library, Yaya Center Cafe") },
                             modifier = Modifier.fillMaxWidth(),
@@ -238,8 +284,7 @@ fun CreateListingScreen(
                                     scope.launch {
                                         val loc = locationRepository.getCurrentLocation()
                                         if (loc != null) {
-                                            selectedLat = LocationUtils.roundCoordinate(loc.latitude)
-                                            selectedLng = LocationUtils.roundCoordinate(loc.longitude)
+                                            setPin(loc.latitude, loc.longitude, recenter = true)
                                         }
                                     }
                                 } else {
@@ -270,13 +315,12 @@ fun CreateListingScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 cameraPositionState = cameraPositionState,
                                 onMapClick = { latLng ->
-                                    selectedLat = LocationUtils.roundCoordinate(latLng.latitude)
-                                    selectedLng = LocationUtils.roundCoordinate(latLng.longitude)
+                                    setPin(latLng.latitude, latLng.longitude, recenter = false)
                                 }
                             ) {
                                 if (selectedLat != null && selectedLng != null) {
                                     Marker(
-                                        state = MarkerState(position = LatLng(selectedLat!!, selectedLng!!)),
+                                        state = markerState,
                                         title = "Skill Location"
                                     )
                                 }
