@@ -21,6 +21,7 @@ import com.skillswap.app.data.model.SwapRequestStatus
 import com.skillswap.app.ui.viewmodel.AuthViewModel
 import com.skillswap.app.ui.viewmodel.ReviewViewModel
 import com.skillswap.app.ui.viewmodel.SwapRequestViewModel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,6 +33,7 @@ fun MyRequestsScreen(
     onNavigateToChat: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
+    val scope = rememberCoroutineScope()
     val authState by authViewModel.uiState.collectAsState()
     val userId = authState.userProfile?.id ?: ""
 
@@ -39,8 +41,14 @@ fun MyRequestsScreen(
     val receivedRequests by requestViewModel.receivedRequests.collectAsState()
     val actionResult by requestViewModel.actionResult.collectAsState()
 
+    val isSubmitting by reviewViewModel.isSubmitting.collectAsState()
+    val reviewResultMessage by reviewViewModel.resultMessage.collectAsState()
+
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Sent, 1 = Received
     val snackbarHostState = remember { SnackbarHostState() }
+
+    var dismissedRequestIds by remember { mutableStateOf(setOf<String>()) }
+    var reviewedRequestIds by remember { mutableStateOf(setOf<String>()) }
 
     var requestToReview by remember { mutableStateOf<SwapRequest?>(null) }
     var reviewRating by remember { mutableDoubleStateOf(5.0) }
@@ -59,37 +67,116 @@ fun MyRequestsScreen(
         }
     }
 
+    // Failure message handler for review submission
+    LaunchedEffect(reviewResultMessage) {
+        reviewResultMessage?.let { msg ->
+            if (msg != "Review submitted successfully") {
+                snackbarHostState.showSnackbar(msg)
+                reviewViewModel.clearResultMessage()
+            }
+        }
+    }
+
+    // Auto-popup logic for learner (requester in sentRequests)
+    LaunchedEffect(sentRequests, userId, dismissedRequestIds, reviewedRequestIds, requestToReview) {
+        if (userId.isNotBlank() && requestToReview == null) {
+            val unreviewedSentCompleted = sentRequests.filter { req ->
+                req.status == SwapRequestStatus.COMPLETED &&
+                        !dismissedRequestIds.contains(req.id) &&
+                        !reviewedRequestIds.contains(req.id)
+            }
+
+            for (req in unreviewedSentCompleted) {
+                try {
+                    val docId = "${req.id}_${userId}"
+                    val doc = FirebaseFirestore.getInstance().collection("reviews").document(docId).get().await()
+                    if (doc.exists()) {
+                        reviewedRequestIds = reviewedRequestIds + req.id
+                    } else {
+                        reviewRating = 5.0
+                        reviewComment = ""
+                        requestToReview = req
+                        break
+                    }
+                } catch (_: Exception) {
+                    // Ignore check failure
+                }
+            }
+        }
+    }
+
     // Review Dialog
     if (requestToReview != null) {
         val target = requestToReview!!
         val isRequester = userId == target.requesterId
         val revieweeId = if (isRequester) target.providerId else target.requesterId
+        val providerName = if (isRequester) target.providerName.ifBlank { "Provider" } else "User"
+
+        val ratingLabel = when (reviewRating.toInt()) {
+            1 -> "Poor"
+            2 -> "Fair"
+            3 -> "Good"
+            4 -> "Very good"
+            5 -> "Excellent"
+            else -> "Excellent"
+        }
 
         AlertDialog(
-            onDismissRequest = { requestToReview = null },
-            title = { Text("Leave Review for ${target.skillTitle}") },
+            onDismissRequest = {
+                dismissedRequestIds = dismissedRequestIds + target.id
+                requestToReview = null
+            },
+            title = {
+                Column {
+                    Text(
+                        text = if (isRequester) "Rate $providerName" else "Leave Review for ${target.skillTitle}",
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "How was your session for ${target.skillTitle}?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Rating (1 - 5 Stars):")
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Centered 40.dp stars
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         (1..5).forEach { star ->
                             IconButton(
                                 onClick = { reviewRating = star.toDouble() },
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
                                 Icon(
-                                    Icons.Default.Star,
+                                    imageVector = Icons.Default.Star,
                                     contentDescription = "$star Stars",
+                                    modifier = Modifier.size(40.dp),
                                     tint = if (star <= reviewRating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
                                 )
                             }
                         }
                     }
 
+                    Text(
+                        text = ratingLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
                     OutlinedTextField(
                         value = reviewComment,
                         onValueChange = { reviewComment = it },
-                        label = { Text("Comment / Feedback") },
+                        label = { Text("Comment / Feedback (Optional)") },
                         placeholder = { Text("Share how the skill exchange went...") },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -109,15 +196,35 @@ fun MyRequestsScreen(
                             comment = reviewComment
                         )
                         reviewViewModel.submitReview(review) {
+                            reviewedRequestIds = reviewedRequestIds + target.id
                             requestToReview = null
+                            reviewViewModel.clearResultMessage()
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Thanks for rating $providerName!")
+                            }
                         }
-                    }
+                    },
+                    enabled = !isSubmitting
                 ) {
-                    Text("Submit Review")
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Submit Review")
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { requestToReview = null }) {
+                TextButton(
+                    onClick = {
+                        dismissedRequestIds = dismissedRequestIds + target.id
+                        requestToReview = null
+                    },
+                    enabled = !isSubmitting
+                ) {
                     Text("Cancel")
                 }
             }
@@ -180,10 +287,13 @@ fun MyRequestsScreen(
                             request = request,
                             currentUserId = userId,
                             isReceived = selectedTab == 1,
+                            isReviewedInSession = reviewedRequestIds.contains(request.id),
                             onUpdateStatus = { status ->
                                 requestViewModel.updateStatus(request.id, status, userId)
                             },
                             onOpenReview = {
+                                reviewRating = 5.0
+                                reviewComment = ""
                                 requestToReview = request
                             }
                         )
@@ -199,13 +309,16 @@ fun SwapRequestCard(
     request: SwapRequest,
     currentUserId: String,
     isReceived: Boolean,
+    isReviewedInSession: Boolean,
     onUpdateStatus: (SwapRequestStatus) -> Unit,
     onOpenReview: () -> Unit
 ) {
     var hasBeenReviewed by remember { mutableStateOf(false) }
 
-    LaunchedEffect(request.id, currentUserId) {
-        if (currentUserId.isNotBlank() && request.status == SwapRequestStatus.COMPLETED) {
+    LaunchedEffect(request.id, currentUserId, isReviewedInSession) {
+        if (isReviewedInSession) {
+            hasBeenReviewed = true
+        } else if (currentUserId.isNotBlank() && request.status == SwapRequestStatus.COMPLETED) {
             try {
                 val docId = "${request.id}_${currentUserId}"
                 val doc = FirebaseFirestore.getInstance().collection("reviews").document(docId).get().await()
