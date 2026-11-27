@@ -1,5 +1,6 @@
 package com.skillswap.app.data.repository
 
+import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 import com.skillswap.app.data.model.*
 import kotlinx.coroutines.tasks.await
@@ -15,6 +16,7 @@ class AdminRepository(
                 try { doc.toObject(UserProfile::class.java) } catch (_: Exception) { null }
             }
         } catch (e: Exception) {
+            Log.e("AdminRepository", "getAllUsers failed", e)
             emptyList()
         }
     }
@@ -26,6 +28,7 @@ class AdminRepository(
                 try { doc.toObject(SkillListing::class.java) } catch (_: Exception) { null }
             }
         } catch (e: Exception) {
+            Log.e("AdminRepository", "getAllSkills failed", e)
             emptyList()
         }
     }
@@ -37,6 +40,7 @@ class AdminRepository(
                 try { doc.toObject(SwapRequest::class.java) } catch (_: Exception) { null }
             }
         } catch (e: Exception) {
+            Log.e("AdminRepository", "getAllSwapRequests failed", e)
             emptyList()
         }
     }
@@ -48,6 +52,7 @@ class AdminRepository(
                 try { doc.toObject(CreditTransaction::class.java) } catch (_: Exception) { null }
             }
         } catch (e: Exception) {
+            Log.e("AdminRepository", "getAllTransactions failed", e)
             emptyList()
         }
     }
@@ -59,6 +64,7 @@ class AdminRepository(
                 try { doc.toObject(Review::class.java) } catch (_: Exception) { null }
             }
         } catch (e: Exception) {
+            Log.e("AdminRepository", "getAllReviews failed", e)
             emptyList()
         }
     }
@@ -73,6 +79,7 @@ class AdminRepository(
                 try { doc.toObject(CreditTransaction::class.java) } catch (_: Exception) { null }
             }.sortedByDescending { it.createdAt }
         } catch (e: Exception) {
+            Log.e("AdminRepository", "getUserTransactions failed", e)
             emptyList()
         }
     }

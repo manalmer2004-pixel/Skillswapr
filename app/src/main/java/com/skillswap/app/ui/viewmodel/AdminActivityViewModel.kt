@@ -73,7 +73,6 @@ class AdminActivityViewModel(
 
                 for ((requesterId, reqs) in cancelledGroup) {
                     if (reqs.size >= 3) {
-                        val name = reqs.firstOrNull()?.providerName ?: requesterId
                         anomalyList.add(
                             AnomalyFlag(
                                 title = "High Swap Cancellation Rate",
@@ -96,8 +95,14 @@ class AdminActivityViewModel(
                     )
                 }
 
+                val swapsAndTxsEmpty = swaps.isEmpty() && txs.isEmpty() && users.isNotEmpty()
+                val ruleErrorMsg = if (swapsAndTxsEmpty) {
+                    "Could not load swap/ledger data. Check Firestore rules and that this account has isAdmin = true."
+                } else null
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    errorMessage = ruleErrorMsg,
                     swapRequests = swaps,
                     transactions = txs,
                     users = users,

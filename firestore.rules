@@ -61,7 +61,7 @@ service cloud.firestore {
 
     // --- 2. TRANSACTIONS COLLECTION ---
     match /transactions/{transactionId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && (isBonusTransaction(transactionId) || isSwapTransaction(transactionId));
       allow update, delete: if false;
     }
@@ -100,7 +100,7 @@ service cloud.firestore {
     }
 
     match /swapRequests/{requestId} {
-      allow read: if isSignedIn() && (resource.data.requesterId == request.auth.uid || resource.data.providerId == request.auth.uid);
+      allow read: if isSignedIn() && (resource.data.requesterId == request.auth.uid || resource.data.providerId == request.auth.uid || isAdmin());
 
       allow create: if isSignedIn()
         && request.resource.data.requesterId == request.auth.uid
