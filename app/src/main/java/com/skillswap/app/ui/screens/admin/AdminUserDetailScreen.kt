@@ -2,7 +2,7 @@ package com.skillswap.app.ui.screens.admin
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -394,7 +394,10 @@ fun AdminUserDetailScreen(
                     Text("No skills posted by this user.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                items(detailData.skills, key = { it.id }) { skill ->
+                itemsIndexed(
+                    items = detailData.skills,
+                    key = { index, skill -> "${skill.id}_$index" }
+                ) { _, skill ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -427,7 +430,10 @@ fun AdminUserDetailScreen(
                     Text("No credit transactions recorded.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                items(detailData.transactions, key = { it.id }) { tx ->
+                itemsIndexed(
+                    items = detailData.transactions,
+                    key = { index, tx -> "${tx.id}_$index" }
+                ) { _, tx ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),

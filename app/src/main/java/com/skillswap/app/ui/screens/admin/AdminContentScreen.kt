@@ -2,8 +2,7 @@ package com.skillswap.app.ui.screens.admin
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -298,7 +297,10 @@ fun AdminContentScreen(
                         }
                     } else {
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(filteredSkills, key = { it.id }) { skill ->
+                            itemsIndexed(
+                                items = filteredSkills,
+                                key = { index, skill -> "${skill.id}_$index" }
+                            ) { _, skill ->
                                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                                     Column(modifier = Modifier.padding(12.dp)) {
                                         Row(
@@ -337,7 +339,10 @@ fun AdminContentScreen(
                     } else {
                         val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(uiState.reviews, key = { it.id }) { review ->
+                            itemsIndexed(
+                                items = uiState.reviews,
+                                key = { index, review -> "${review.id}_$index" }
+                            ) { _, review ->
                                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                                     Row(
                                         modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -384,7 +389,10 @@ fun AdminContentScreen(
                     val sortedCats = remember(uiState.categories) { uiState.categories.sortedBy { it.order } }
 
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(sortedCats, key = { it.id }) { cat ->
+                        itemsIndexed(
+                            items = sortedCats,
+                            key = { index, cat -> "${cat.id}_$index" }
+                        ) { _, cat ->
                             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                                 Row(
                                     modifier = Modifier.padding(12.dp).fillMaxWidth(),

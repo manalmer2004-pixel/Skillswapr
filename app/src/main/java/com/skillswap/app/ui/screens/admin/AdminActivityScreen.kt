@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
@@ -156,7 +157,10 @@ fun AdminActivityScreen(
                     } else {
                         val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault()) }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(filteredSwaps, key = { it.id }) { req ->
+                            itemsIndexed(
+                                items = filteredSwaps,
+                                key = { index, req -> "${req.id}_$index" }
+                            ) { _, req ->
                                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Row(
@@ -189,7 +193,7 @@ fun AdminActivityScreen(
                                                     cancelReasonError = null
                                                     requestToCancel = req
                                                 },
-                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                                colors = ButtonDefaults.buttonColors(contentColor = MaterialTheme.colorScheme.error),
                                                 modifier = Modifier.align(Alignment.End)
                                             ) {
                                                 Icon(Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -270,7 +274,11 @@ fun AdminActivityScreen(
                     } else {
                         val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault()) }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(filteredTxs, key = { it.id }) { tx ->
+                            itemsIndexed(
+                                items = filteredTxs,
+                                key = { index, tx -> "${tx.id}_$index" }
+                            ) { _, tx ->
+                                val userDisplay = if (tx.userId.isNotBlank()) tx.userId.take(8) else "unknown user"
                                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                                     Row(
                                         modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -278,7 +286,7 @@ fun AdminActivityScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text("${tx.type.name} · ${tx.userId.take(8)}...", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                            Text("${tx.type.name} · $userDisplay...", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                             if (tx.reason.isNotBlank()) Text("Reason: ${tx.reason}", style = MaterialTheme.typography.bodySmall)
                                             Text("Balance after: ${tx.balanceAfter} credits", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             Text(dateFormat.format(Date(tx.createdAt)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)

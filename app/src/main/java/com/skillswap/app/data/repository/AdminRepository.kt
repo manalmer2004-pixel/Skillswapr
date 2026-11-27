@@ -13,7 +13,11 @@ class AdminRepository(
         return try {
             val snapshot = firestore.collection("users").limit(300).get().await()
             snapshot.documents.mapNotNull { doc ->
-                try { doc.toObject(UserProfile::class.java) } catch (_: Exception) { null }
+                try {
+                    doc.toObject(UserProfile::class.java)?.copy(id = doc.id)
+                } catch (_: Exception) {
+                    null
+                }
             }
         } catch (e: Exception) {
             Log.e("AdminRepository", "getAllUsers failed", e)
@@ -25,7 +29,11 @@ class AdminRepository(
         return try {
             val snapshot = firestore.collection("skills").get().await()
             snapshot.documents.mapNotNull { doc ->
-                try { doc.toObject(SkillListing::class.java) } catch (_: Exception) { null }
+                try {
+                    doc.toObject(SkillListing::class.java)?.copy(id = doc.id)
+                } catch (_: Exception) {
+                    null
+                }
             }
         } catch (e: Exception) {
             Log.e("AdminRepository", "getAllSkills failed", e)
@@ -37,7 +45,11 @@ class AdminRepository(
         return try {
             val snapshot = firestore.collection("swapRequests").get().await()
             snapshot.documents.mapNotNull { doc ->
-                try { doc.toObject(SwapRequest::class.java) } catch (_: Exception) { null }
+                try {
+                    doc.toObject(SwapRequest::class.java)?.copy(id = doc.id)
+                } catch (_: Exception) {
+                    null
+                }
             }
         } catch (e: Exception) {
             Log.e("AdminRepository", "getAllSwapRequests failed", e)
@@ -49,7 +61,11 @@ class AdminRepository(
         return try {
             val snapshot = firestore.collection("transactions").get().await()
             snapshot.documents.mapNotNull { doc ->
-                try { doc.toObject(CreditTransaction::class.java) } catch (_: Exception) { null }
+                try {
+                    doc.toObject(CreditTransaction::class.java)?.copy(id = doc.id)
+                } catch (_: Exception) {
+                    null
+                }
             }
         } catch (e: Exception) {
             Log.e("AdminRepository", "getAllTransactions failed", e)
@@ -61,7 +77,11 @@ class AdminRepository(
         return try {
             val snapshot = firestore.collection("reviews").get().await()
             snapshot.documents.mapNotNull { doc ->
-                try { doc.toObject(Review::class.java) } catch (_: Exception) { null }
+                try {
+                    doc.toObject(Review::class.java)?.copy(id = doc.id)
+                } catch (_: Exception) {
+                    null
+                }
             }
         } catch (e: Exception) {
             Log.e("AdminRepository", "getAllReviews failed", e)
@@ -76,7 +96,11 @@ class AdminRepository(
                 .get()
                 .await()
             snapshot.documents.mapNotNull { doc ->
-                try { doc.toObject(CreditTransaction::class.java) } catch (_: Exception) { null }
+                try {
+                    doc.toObject(CreditTransaction::class.java)?.copy(id = doc.id)
+                } catch (_: Exception) {
+                    null
+                }
             }.sortedByDescending { it.createdAt }
         } catch (e: Exception) {
             Log.e("AdminRepository", "getUserTransactions failed", e)
